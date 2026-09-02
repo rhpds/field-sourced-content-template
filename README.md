@@ -67,21 +67,40 @@ metadata:
     demo.redhat.com/userinfo: ""
 ```
 
+## Community catalog
+
+`catalog/tested/` holds **stubs**, not copies of charts. Each file points at a
+Helm chart: either `examples/` in this repository, or someone else's GitHub.
+
+The two files already there (`example-helm`, `example-ansible`) are the
+in-repo examples, stubbed the same way an external demo will be. Change
+`repoURL` / `path` and you have the third item.
+
+These stubs do not appear in Argo until the Field Source Content CI grows an
+ApplicationSet that reads `catalog/tested/*.yaml`. Until then they are the
+schema. Clone-and-order with your own URL still works exactly as above.
+
+See [catalog/README.md](catalog/README.md).
+
 ## Documentation
 
 - [examples/helm/README.md](examples/helm/README.md) - Helm deployment guide
 - [examples/ansible/README.md](examples/ansible/README.md) - Ansible deployment guide
+- [catalog/README.md](catalog/README.md) - Stub schema for the community catalog
 - [docs/ansible-developer-guide.md](docs/ansible-developer-guide.md) - In-depth Ansible patterns
 - [docs/SHOWROOM-UPDATE-SPEC.md](docs/SHOWROOM-UPDATE-SPEC.md) - Showroom maintenance guide
 
 ## Repository Structure
 
 ```
-field-content/
+field-sourced-content-template/
 ├── examples/
-│   ├── helm/        # Helm-based deployment example
-│   └── ansible/     # Ansible-based deployment example
+│   ├── helm/        # Helm starter chart (also the target of the helm stub)
+│   └── ansible/     # Ansible starter chart (also the target of the ansible stub)
+├── catalog/
+│   ├── tested/      # Stubs the ApplicationSet will list in Argo
+│   └── untested/    # Stubs not yet promoted
 ├── roles/
-│   └── ocp4_workload_field_content/  # AgnosticD workload role
-└── docs/            # Developer guides and diagrams
+│   └── ocp4_workload_field_content/  # AgnosticD workload role (lives in core_workloads)
+└── docs/
 ```

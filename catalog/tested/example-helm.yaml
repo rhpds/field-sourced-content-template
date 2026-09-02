@@ -1,0 +1,16 @@
+# In-repo example. Same stub shape as an external demo; only repoURL/path
+# point here instead of at someone else's GitHub.
+name: example-helm
+displayName: Example (Helm)
+description: >-
+  App-of-apps Helm example shipped in this repository. Hello World httpd
+  and optional Showroom. Copy examples/helm to start your own chart.
+owner: RHDP Content Team
+repoURL: https://github.com/rhpds/field-sourced-content-template.git
+revision: main
+path: examples/helm
+requires:
+  virt: false
+  rhoai: false
+  aap: false
+  clusterSize: sno
