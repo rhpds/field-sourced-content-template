@@ -1,0 +1,17 @@
+# External demo. Same stub shape as the in-repo examples; repoURL points
+# at the author's GitHub, path is the chart at the repository root.
+name: otel-observability-lab
+displayName: OpenShift Observability with OpenTelemetry
+description: >-
+  Multi-user workshop (~90 min) on OpenShift 4.22: Tempo, Loki, Cluster
+  Observability Operator, and a polyglot dice-game app with OpenTelemetry
+  sampling. Chart is at the repository root.
+owner: Natale Vinto (@blues-man)
+repoURL: https://github.com/blues-man/openshift-observability-otel-lab.git
+revision: main
+path: "."
+requires:
+  virt: false
+  rhoai: false
+  aap: false
+  clusterSize: multinode

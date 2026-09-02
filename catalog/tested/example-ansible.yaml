@@ -1,0 +1,17 @@
+# In-repo example. Same stub shape as an external demo; only repoURL/path
+# point here instead of at someone else's GitHub.
+name: example-ansible
+displayName: Example (Ansible)
+description: >-
+  Ansible-via-Helm example shipped in this repository. A Job runs
+  playbooks for operator install, hello-world, and Showroom. Copy
+  examples/ansible to start your own chart.
+owner: RHDP Content Team
+repoURL: https://github.com/rhpds/field-sourced-content-template.git
+revision: main
+path: examples/ansible
+requires:
+  virt: false
+  rhoai: false
+  aap: false
+  clusterSize: sno
