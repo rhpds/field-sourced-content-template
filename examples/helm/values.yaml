@@ -13,6 +13,8 @@ gitops:
 # ArgoCD settings
 argocd:
   namespace: openshift-gitops
+  # Standalone default. The field-content workload overrides this to "deployed"
+  # so child Applications are not mixed into the catalog list (default project).
   project: default
 
 # ============================================================

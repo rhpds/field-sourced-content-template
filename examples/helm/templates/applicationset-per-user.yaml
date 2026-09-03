@@ -22,7 +22,7 @@ spec:
       destination:
         namespace: "{{`{{ user }}`}}-hello-world"
         server: 'https://kubernetes.default.svc'
-      project: default
+      project: {{ .Values.argocd.project }}
       syncPolicy:
         syncOptions:
         - CreateNamespace=true
