@@ -9,7 +9,7 @@ description: >-
 owner: RHDP Content Team
 repoURL: https://github.com/rhpds/field-sourced-content-template.git
 revision: main
-path: examples/ansible
+chartPath: examples/ansible
 requires:
   virt: false
   rhoai: false

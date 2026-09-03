@@ -8,7 +8,7 @@ description: >-
 owner: RHDP Content Team
 repoURL: https://github.com/rhpds/field-sourced-content-template.git
 revision: main
-path: examples/helm
+chartPath: examples/helm
 requires:
   virt: false
   rhoai: false

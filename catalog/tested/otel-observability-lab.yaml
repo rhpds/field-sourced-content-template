@@ -9,7 +9,7 @@ description: >-
 owner: Natale Vinto (@blues-man)
 repoURL: https://github.com/blues-man/openshift-observability-otel-lab.git
 revision: main
-path: "."
+chartPath: "."
 requires:
   virt: false
   rhoai: false

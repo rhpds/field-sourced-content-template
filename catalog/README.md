@@ -29,7 +29,7 @@ repoURL: https://github.com/rhpds/field-sourced-content-template.git
 revision: main
 
 # Path to the chart inside repoURL. Use "." for the repository root.
-path: examples/helm
+chartPath: examples/helm
 
 # Who to ping when the chart is broken. Not RHDP platform.
 owner: Name or GitHub handle
