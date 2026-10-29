@@ -1,0 +1,221 @@
+= Architecture
+:navtitle: Architecture
+
+This page describes how all the Showroom components fit together -- from content authoring through deployment to the running lab environment.
+
+== Component Overview
+
+The Showroom ecosystem is split across several repositories, each owning a distinct layer:
+
+[cols="1,3,1",options="header"]
+|===
+|Component |Purpose |Repository
+
+|**agnosticd.showroom** (this collection)
+|Ansible roles that orchestrate deployment on OCP or VMs
+|https://github.com/agnosticd/showroom[agnosticd/showroom]
+
+|**Content repo** (yours)
+|AsciiDoc lab instructions structured as an Antora site
+|e.g. https://github.com/rhpds/showroom_template_nookbag[showroom_template_nookbag]
+
+|**Showroom Deployer**
+|Helm charts for OCP deployment (showroom-single-pod, zerotouch)
+|https://github.com/rhpds/showroom-deployer[rhpds/showroom-deployer]
+
+|**Showroom Images**
+|Container images: content server, Antora builder, terminals, noVNC, etc.
+|https://github.com/rhpds/showroom-images[rhpds/showroom-images]
+
+|**Nookbag**
+|The zero-touch UI bundle that renders the split-pane interface
+|https://github.com/rhpds/nookbag[rhpds/nookbag]
+
+|**AgnosticV**
+|Catalog item configuration for the Red Hat Demo Platform
+|https://github.com/rhpds/agnosticv[rhpds/agnosticv]
+|===
+
+== How They Connect
+
+[source,text]
+----
+                    ┌─────────────────┐
+                    │   AgnosticV     │
+                    │  catalog item   │
+                    │  (common.yaml)  │
+                    └────────┬────────┘
+                             │ references
+                             ▼
+                    ┌─────────────────┐
+                    │ agnosticd       │
+                    │ .showroom       │
+                    │ collection      │
+                    │ (Ansible roles) │
+                    └────────┬────────┘
+                             │ uses
+                ┌────────────┼────────────┐
+                ▼            ▼            ▼
+      ┌──────────────┐ ┌──────────┐ ┌──────────────┐
+      │  Showroom    │ │ Showroom │ │   Nookbag    │
+      │  Deployer    │ │  Images  │ │  (UI bundle) │
+      │ (Helm chart) │ │(quay.io) │ │  (.zip)      │
+      └──────┬───────┘ └────┬─────┘ └──────┬───────┘
+             │              │              │
+             └──────────────┼──────────────┘
+                            ▼
+                    ┌─────────────────┐
+                    │  Running        │
+                    │  Showroom       │         ┌──────────────┐
+                    │  instance       │◄────────│ Content repo │
+                    │  (pod or VM)    │ clones  │ (your lab)   │
+                    └─────────────────┘         └──────────────┘
+----
+
+== OCP4 Deployment Flow
+
+When the `ocp4_workload_showroom` role runs:
+
+[source,text]
+----
+1. Validate inputs
+   │
+2. Load user_data (credentials, URLs)
+   │
+3. Create namespace (showroom-<guid>)
+   │
+4. Render Helm chart ───► showroom-single-pod chart
+   │                       from showroom-deployer
+   │
+5. Apply manifests to cluster
+   │
+6. Pod starts with init containers:
+   │  ├── git-cloner: clones content repo
+   │  └── antora-builder: renders HTML
+   │
+7. Main containers start:
+   │  ├── showroom-content: serves HTML + injects user_data
+   │  ├── nginx: reverse proxy
+   │  ├── wetty/terminal: web terminal (optional)
+   │  └── novnc: VNC client (optional)
+   │
+8. Route is created
+   │
+9. URL published to user_info
+----
+
+=== Pod Architecture (showroom-single-pod)
+
+[source,text]
+----
+┌─ Showroom Pod ──────────────────────────────────────────────┐
+│                                                             │
+│  Init Containers (run once, sequentially):                  │
+│  ┌─────────────┐    ┌─────────────────┐                   │
+│  │ git-cloner  │───►│ antora-builder  │                   │
+│  │ (clone repo)│    │ (render HTML)   │                   │
+│  └─────────────┘    └─────────────────┘                   │
+│          │                    │                             │
+│          ▼                    ▼                             │
+│      /shared/git         /shared/html                      │
+│                                                             │
+│  Main Containers (run concurrently):                        │
+│  ┌─────────┐  ┌───────────────┐  ┌────────┐  ┌────────┐  │
+│  │  nginx  │  │showroom-content│  │ wetty/ │  │ novnc  │  │
+│  │ (proxy) │  │ (serve HTML)  │  │terminal│  │(option)│  │
+│  └────┬────┘  └───────────────┘  └────────┘  └────────┘  │
+│       │                                                     │
+│       ▼                                                     │
+│    Route (showroom-<guid>.apps.cluster.example.com)         │
+└─────────────────────────────────────────────────────────────┘
+----
+
+== VM Deployment Flow
+
+When the `vm_workload_showroom` role runs on a bastion host:
+
+[source,text]
+----
+1. Install OS dependencies (Podman, Git, etc.)
+   │
+2. Create showroom user + enable rootless Podman
+   │
+3. Configure SSH access for lab users
+   │
+4. Clone content repo to /opt/showroom/content
+   │
+5. Inject user_data into antora.yml attributes
+   │
+6. Run Antora container to build HTML ──► /opt/showroom/build
+   │
+7. Generate Podman Compose file:
+   │  ├── Traefik (reverse proxy + TLS)
+   │  ├── showroom-content (serve HTML)
+   │  ├── wetty (terminal, optional)
+   │  └── codeserver / parasol (optional)
+   │
+8. Start showroom.service (systemd)
+   │
+9. Traefik obtains TLS cert via ACME
+   │
+10. URL published to user_info
+----
+
+== Content Rendering Pipeline
+
+Both deployment paths follow the same content rendering pipeline:
+
+[source,text]
+----
+Content repo ──► Clone ──► Inject user_data ──► Antora build ──► Serve HTML
+                  │              │                    │              │
+                  │         Merge into           Use site.yml    nginx or
+                  │        antora.yml            or default-    showroom-
+                  │        attributes            site.yml       content
+                  │                                              httpd
+                  └── git-cloner (OCP)
+                      or git clone (VM)
+----
+
+The key difference between OCP and VM:
+
+* **OCP**: Content rendering happens inside init containers in the pod. The `showroom-content` image handles attribute injection and Antora building.
+* **VM**: Content rendering happens directly on the host via a short-lived Antora container before the Podman Compose services start.
+
+== Image Catalog
+
+The container images used by Showroom are built from the https://github.com/rhpds/showroom-images[showroom-images] repository and hosted on `quay.io/rhpds`:
+
+[cols="1,3",options="header"]
+|===
+|Image |Purpose
+
+|`quay.io/rhpds/showroom-content`
+|Clones content, injects attributes, builds Antora HTML, serves via HTTP.
+
+|`quay.io/rhpds/antora`
+|Standalone Antora builder (used as init container on OCP, standalone on VM).
+
+|`quay.io/rhpds/git-cloner`
+|Clones git repos with branch/tag/commit support (OCP init container).
+
+|`quay.io/rhpds/wetty`
+|Web-based SSH terminal.
+
+|`quay.io/rhpds/openshift-showroom-terminal-ocp`
+|Containerised terminal with OCP CLI tools (oc, kubectl, etc.).
+
+|`ghcr.io/rhpds/showroom-novnc`
+|NoVNC client for VNC desktop access.
+
+|`quay.io/rhpds/traefik`
+|Traefik reverse proxy (VM deployments).
+|===
+
+See xref:images.adoc[] for the full image catalog and release process.
+
+== Next Steps
+
+* xref:deployer.adoc[] -- deep dive into the Helm charts.
+* xref:images.adoc[] -- image catalog and how to build/release.
+* xref:nookbag.adoc[] -- the zero-touch UI bundle.

@@ -1,0 +1,417 @@
+= VM Role Reference
+:navtitle: VM Role Reference
+
+`vm_workload_showroom` turns a RHEL/Fedora host (bastion, lab VM, etc.) into a Showroom instance using rootless Podman.
+
+== What It Does
+
+. **System preparation** -- installs OS and Python dependencies, allows unprivileged ports for rootless containers.
+. **User and SSH setup** -- creates a dedicated `showroom` user (UID 1888), enables rootless Podman via systemd, configures SSH access for lab users.
+. **Content pipeline** -- clones your Antora/AsciiDoc content repo, optionally injects `user_data` as Antora attributes, renders HTML via an Antora container.
+. **Service orchestration** -- generates a Podman Compose file for Traefik + Showroom + optional tab services, installs a `showroom.service` systemd unit.
+. **TLS and verification** -- obtains and renews certificates via Traefik ACME, verifies TLS with OpenSSL, publishes the final lab URL.
+
+== Architecture
+
+[source,text]
+----
+┌─────────────────────────────────────────────────────────┐
+│ Host System (RHEL/Fedora)                               │
+│                                                         │
+│  ┌─────────────────────────────────────────────────┐    │
+│  │ Systemd Service (showroom.service)              │    │
+│  │                                                 │    │
+│  │  ┌──────────────────────────────────────────┐   │    │
+│  │  │ Rootless Podman (showroom user)          │   │    │
+│  │  │                                          │   │    │
+│  │  │  ┌──────────┐  ┌───────────────┐        │   │    │
+│  │  │  │ Traefik  │──│ Showroom HTTPD │        │   │    │
+│  │  │  │ (proxy)  │  │ (content)     │        │   │    │
+│  │  │  └──────────┘  └───────────────┘        │   │    │
+│  │  │       │                                  │   │    │
+│  │  │  Optional tab services:                  │   │    │
+│  │  │  ┌──────────┐  ┌──────────┐             │   │    │
+│  │  │  │  Wetty   │  │ CodeSrvr │             │   │    │
+│  │  │  │(terminal)│  │ Parasol  │             │   │    │
+│  │  │  └──────────┘  └──────────┘             │   │    │
+│  │  └──────────────────────────────────────────┘   │    │
+│  └─────────────────────────────────────────────────┘    │
+│                                                         │
+│  /opt/showroom/content        cloned git repo           │
+│  /opt/showroom/build          rendered HTML             │
+│  /opt/showroom/orchestration  compose + acme.json       │
+└─────────────────────────────────────────────────────────┘
+----
+
+== Core Variables
+
+[cols="1,1,1,3",options="header"]
+|===
+|Variable |Type |Default |Description
+
+|`showroom_deploy`
+|boolean
+|`true`
+|Guard for the whole role. Set to `false` to skip deployment.
+
+|`showroom_host`
+|string
+|_(derived from AgnosticD)_
+|Public hostname for the Showroom instance. Used in TLS and user-facing URLs.
+
+|`showroom_git_repo`
+|string
+|`https://github.com/rhpds/showroom_template_nookbag.git`
+|Git repo with Antora/AsciiDoc content.
+
+|`showroom_git_ref`
+|string
+|`main`
+|Branch, tag, or commit to check out.
+
+|`showroom_content_antora_playbook`
+|string
+|`default-site.yml`
+|Antora site file. When set to the default, the role auto-detects between `default-site.yml` and `site.yml`.
+|===
+
+== TLS and ACME
+
+Traefik handles certificate issuance and renewal automatically.
+
+[cols="1,1,1,3",options="header"]
+|===
+|Variable |Type |Default |Description
+
+|`showroom_tls_provider`
+|string
+|`zerossl`
+|`zerossl`, `letsencrypt`, or `none`.
+
+|`showroom_acme_email`
+|string
+|`john.doe@rhdp.net`
+|ACME account email (required unless `showroom_tls_provider: none`).
+
+|`showroom_http_port`
+|integer
+|`80`
+|Host port for HTTP (also used for ZeroSSL HTTP-01 challenge).
+
+|`showroom_primary_port`
+|integer
+|`443`
+|Host port for HTTPS.
+|===
+
+=== ZeroSSL (default)
+
+Uses HTTP-01 challenge. Requires External Account Binding (EAB) credentials:
+
+[cols="1,1,1,3",options="header"]
+|===
+|Variable |Type |Default |Description
+
+|`showroom_acme_zerossl_eab_kid`
+|string
+|`""`
+|EAB key ID from ZeroSSL.
+
+|`showroom_acme_zerossl_eab_hmac_key`
+|string
+|`""`
+|EAB HMAC key from ZeroSSL.
+|===
+
+=== Let's Encrypt
+
+Uses TLS-ALPN-01 challenge on port 443. No EAB needed:
+
+[source,yaml]
+----
+showroom_tls_provider: letsencrypt
+showroom_acme_email: admin@example.com
+----
+
+=== No TLS
+
+Disables TLS entirely. Traefik serves HTTP only:
+
+[source,yaml]
+----
+showroom_tls_provider: none
+showroom_http_port: 8080
+----
+
+Use this when TLS is terminated at a load balancer or reverse proxy in front of the VM (e.g. OpenShift CNV routes with `tls_termination: edge`).
+
+== Tab Services
+
+Tab services add terminals, editors, and other tools alongside the lab content.
+They are controlled by `showroom_tab_services`:
+
+[source,yaml]
+----
+showroom_tab_services:
+  - single_terminal
+  - second_terminal
+----
+
+=== Available Tab Services
+
+[cols="1,3",options="header"]
+|===
+|Service |Description
+
+|`single_terminal`
+|A Wetty web terminal connected to a host via SSH.
+
+|`second_terminal`
+|A second Wetty terminal, typically connected to a different host.
+
+|`codeserver`
+|A VS Code editor (Code Server) running in the browser.
+
+|`parasol`
+|The Parasol service for AI-related labs.
+|===
+
+=== Terminal SSH Configuration
+
+When using `single_terminal`:
+
+[cols="1,1,1,3",options="header"]
+|===
+|Variable |Type |Default |Description
+
+|`showroom_ssh_method`
+|string
+|`password`
+|`password` or `sshkey`.
+
+|`showroom_ssh_host`
+|string
+|`host.containers.internal`
+|SSH target host. Use `host.containers.internal` to connect back to the host running Podman.
+
+|`showroom_ssh_username`
+|string
+|_(from user_data)_
+|SSH username.
+
+|`showroom_ssh_password`
+|string
+|_(from user_data)_
+|SSH password (when method is `password`).
+
+|`showroom_ssh_port`
+|integer
+|`22`
+|SSH port.
+|===
+
+When using `second_terminal`, the same pattern applies with `showroom_terminal2_*` variables:
+
+[source,yaml]
+----
+showroom_terminal2_ssh_host: worker.example.com
+showroom_terminal2_ssh_username: lab-user
+showroom_terminal2_ssh_password: "{{ common_password }}"
+----
+
+=== tmux Support
+
+[cols="1,1,1,3",options="header"]
+|===
+|Variable |Type |Default |Description
+
+|`showroom_ttys_enable_tmux`
+|boolean
+|`false`
+|If `true`, terminals auto-launch a named `tmux` session.
+|===
+
+== User, Paths, and Images
+
+[cols="1,1,1,3",options="header"]
+|===
+|Variable |Type |Default |Description
+
+|`showroom_user`
+|string
+|`showroom`
+|System user that owns content and runs rootless containers.
+
+|`showroom_user_home_dir`
+|string
+|`/opt/showroom`
+|Base directory for all Showroom files.
+
+|`showroom_user_content_dir`
+|string
+|`{{ showroom_user_home_dir }}/content`
+|Git checkout of the content repo.
+
+|`showroom_user_build_dir`
+|string
+|`{{ showroom_user_home_dir }}/build`
+|Antora HTML output mounted into the HTTPD container.
+
+|`showroom_user_orchestration_dir`
+|string
+|`{{ showroom_user_home_dir }}/orchestration`
+|Generated compose file and `acme.json`.
+
+|`showroom_antora_image`
+|string
+|`quay.io/rhpds/antora`
+|Antora builder image.
+
+|`showroom_antora_image_tag`
+|string
+|`v1.2.0`
+|Antora image tag.
+
+|`showroom_reverse_proxy_image`
+|string
+|`quay.io/rhpds/traefik`
+|Traefik reverse proxy image.
+
+|`showroom_httpd_image`
+|string
+|`quay.io/rhpds/showroom-content`
+|Showroom HTTPD content server image.
+|===
+
+== UI Configuration
+
+[cols="1,1,1,3",options="header"]
+|===
+|Variable |Type |Default |Description
+
+|`showroom_ui`
+|string
+|`zero-touch`
+|UI type. `zero-touch` uses the nookbag UI bundle.
+
+|`showroom_ui_zero_bundle`
+|string
+|nookbag v0.3.0 ZIP URL
+|URL of the zero-touch UI bundle.
+|===
+
+== Dev Mode
+
+Dev mode enables diagnostic features in the Antora build, including an _Attributes_ reference page and unlisted pages in the navigation.
+
+[cols="1,1,1,3",options="header"]
+|===
+|Variable |Type |Default |Description
+
+|`showroom_antora_enable_dev_mode`
+|boolean
+|`false`
+|Enable the Antora dev-mode extension.
+|===
+
+[source,yaml]
+----
+showroom_antora_enable_dev_mode: true
+----
+
+== Lab User Configuration
+
+[cols="1,1,1,3",options="header"]
+|===
+|Variable |Type |Default |Description
+
+|`showroom_lab_users`
+|list
+|`["rhel"]`
+|OS accounts created or adjusted for lab SSH access.
+
+|`showroom_ssh_method`
+|string
+|`password`
+|SSH authentication method for lab users: `password` or `sshkey`.
+|===
+
+== Examples
+
+=== Minimal HTTP-only deployment
+
+[source,yaml]
+----
+- hosts: bastion
+  become: true
+  roles:
+    - role: agnosticd.showroom.vm_workload_showroom
+      vars:
+        showroom_tls_provider: none
+        showroom_http_port: 8080
+        showroom_host: bastion.example.com
+        showroom_git_repo: https://github.com/myorg/my-lab.git
+----
+
+=== HTTPS with ZeroSSL
+
+[source,yaml]
+----
+- hosts: bastion
+  become: true
+  roles:
+    - role: agnosticd.showroom.vm_workload_showroom
+      vars:
+        showroom_host: lab.example.com
+        showroom_tls_provider: zerossl
+        showroom_acme_email: admin@example.com
+        showroom_acme_zerossl_eab_kid: "{{ lookup('env', 'ZEROSSL_EAB_KID') }}"
+        showroom_acme_zerossl_eab_hmac_key: "{{ lookup('env', 'ZEROSSL_EAB_HMAC') }}"
+        showroom_git_repo: https://github.com/myorg/my-lab.git
+----
+
+=== With terminal and Code Server
+
+[source,yaml]
+----
+showroom_git_repo: https://github.com/myorg/my-lab.git
+showroom_git_ref: main
+showroom_host: "{{ bastion_public_hostname }}"
+showroom_tls_provider: none
+
+showroom_tab_services:
+  - single_terminal
+  - codeserver
+
+showroom_ssh_method: password
+showroom_ssh_host: host.containers.internal
+showroom_ssh_username: lab-user
+showroom_ssh_password: "{{ common_password }}"
+----
+
+=== AgnosticV integration (CNV bastion)
+
+[source,yaml]
+----
+post_software_final_workloads:
+  bastions:
+    - agnosticd.showroom.vm_workload_showroom
+
+showroom_git_repo: https://github.com/myorg/my-lab.git
+showroom_git_ref: vm-example
+showroom_tls_provider: none
+showroom_host: "{{ bastion_public_hostname }}"
+
+showroom_tab_services:
+  - single_terminal
+  - second_terminal
+
+showroom_ssh_method: password
+showroom_ssh_host: host.containers.internal
+showroom_ssh_username: "{{ bastion_student_user_name }}"
+showroom_ssh_password: "{{ common_password }}"
+
+showroom_terminal2_ssh_host: worker.sandbox-{{ guid }}-ocp4-cluster.svc.cluster.local
+showroom_terminal2_ssh_username: "{{ bastion_student_user_name }}"
+showroom_terminal2_ssh_password: "{{ common_password }}"
+----

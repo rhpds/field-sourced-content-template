@@ -4,7 +4,7 @@ name: example-helm
 displayName: Example (Helm)
 description: >-
   App-of-apps Helm example shipped in this repository. Hello World httpd
-  and optional Showroom. Copy examples/helm to start your own chart.
+  and an optional operator. Copy examples/helm to start your own chart.
 owner: RHDP Content Team
 repoURL: https://github.com/rhpds/field-sourced-content-template.git
 revision: main

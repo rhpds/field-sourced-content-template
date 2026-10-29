@@ -1,0 +1,159 @@
+= Showroom Deployer
+:navtitle: Showroom Deployer
+
+The https://github.com/rhpds/showroom-deployer[Showroom Deployer] repository contains the Helm charts that power Showroom on OpenShift.
+The `ocp4_workload_showroom` Ansible role renders and applies these charts -- you typically do not interact with them directly, but understanding the charts helps with debugging and advanced customisation.
+
+== Helm Charts
+
+The repository provides three charts:
+
+[cols="1,3",options="header"]
+|===
+|Chart |Description
+
+|`showroom-single-pod`
+|**Recommended.** All containers (content, proxy, terminal, noVNC) in a single pod. Simple, resource-efficient, and the default used by the Ansible role.
+
+|`showroom`
+|Multi-pod layout (separate pods for home, content, terminal, proxy). Legacy -- use `showroom-single-pod` for new deployments.
+
+|`zerotouch`
+|Zero-touch lab deployment with setup automation, IronRDP, OCP console embedding, and embedded content. For advanced use cases.
+|===
+
+The Ansible role uses `showroom-single-pod` by default (`ocp4_workload_showroom_deployer_chart_name`).
+
+== Chart Repository
+
+Charts are published to GitHub Pages at `https://rhpds.github.io/showroom-deployer`.
+
+To use the charts directly with Helm:
+
+[source,bash]
+----
+helm repo add rhpds https://rhpds.github.io/showroom-deployer
+helm repo update
+----
+
+== showroom-single-pod Architecture
+
+=== Init Containers
+
+Run sequentially before the main containers start:
+
+. **git-cloner** -- clones the content repository (URL, branch/tag from `content.repoUrl` and `content.repoRef`) into a shared volume.
+. **antora-builder** -- runs Antora against the cloned content to produce static HTML in a shared volume.
+
+=== Main Containers
+
+Run concurrently after init containers complete:
+
+* **nginx** -- reverse proxy that routes traffic to the content server, terminal, and noVNC containers.
+* **showroom-content** -- serves the built HTML, handles attribute injection, and exposes the UI.
+* **wetty** (optional) -- web terminal providing SSH access.
+* **showroom-terminal** (optional) -- containerised terminal with CLI tools.
+* **novnc** (optional) -- NoVNC client for VNC desktop access.
+
+=== Storage
+
+A PVC is used to share data between init and main containers:
+
+* `/shared/git` -- cloned repository
+* `/shared/html` -- built Antora HTML output
+
+== Key Values
+
+These are the most important `values.yaml` parameters.
+The Ansible role sets these automatically -- this reference is for developers working directly with the chart.
+
+[cols="1,1,3",options="header"]
+|===
+|Parameter |Type |Description
+
+|`guid`
+|string
+|User/session ID. Used in namespace and route names.
+
+|`deployer.domain`
+|string
+|OpenShift apps domain (e.g. `apps.cluster.example.com`).
+
+|`content.repoUrl`
+|string
+|Git URL of the Antora content repository.
+
+|`content.repoRef`
+|string
+|Git branch, tag, or commit.
+
+|`content.antoraPlaybook`
+|string
+|Antora playbook file to use (e.g. `default-site.yml`).
+
+|`content.user_data`
+|object
+|YAML object of key-value pairs injected into Antora attributes.
+
+|`content.uiConfig`
+|string
+|Override for `ui-config.yml` content.
+
+|`terminal.setup`
+|boolean
+|Enable the showroom terminal container.
+
+|`wetty.setup`
+|boolean
+|Enable the Wetty terminal container.
+
+|`novnc.setup`
+|boolean
+|Enable the noVNC container.
+
+|`novnc.vncServer`
+|string
+|VNC server `host:port`.
+
+|`novnc.password`
+|string
+|VNC password.
+|===
+
+== Direct Deployment (Without Ansible)
+
+For testing or development, you can deploy the chart directly:
+
+[source,bash]
+----
+helm template showroom rhpds/showroom-single-pod \
+  --set deployer.domain=apps.cluster.example.com \
+  --set general.guid=my-test \
+  --set content.repoUrl=https://github.com/rhpds/showroom_template_nookbag \
+  | oc apply -f -
+----
+
+Or with `helm install`:
+
+[source,bash]
+----
+helm install showroom rhpds/showroom-single-pod \
+  --create-namespace \
+  --set deployer.domain=apps.cluster.example.com \
+  --set general.guid=my-test \
+  --set content.repoUrl=https://github.com/rhpds/showroom_template_nookbag
+----
+
+== Release Process
+
+Charts are versioned and released via GitHub Actions:
+
+* PRs to `/charts` are automatically linted and tested.
+* Merges to `main` trigger a release to the chart repository.
+* Available versions: https://github.com/rhpds/showroom-deployer/releases[releases page].
+
+== Further Reading
+
+* https://github.com/rhpds/showroom-deployer[Source repository]
+* xref:architecture.adoc[] -- how the deployer fits into the overall system.
+* xref:images.adoc[] -- the container images used by the chart.

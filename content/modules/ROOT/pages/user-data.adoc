@@ -1,0 +1,203 @@
+= User Data and Variables
+:navtitle: User Data and Variables
+
+User data is the mechanism that connects your infrastructure provisioning to your Showroom content.
+Credentials, hostnames, URLs, and other runtime values written by infrastructure roles during provisioning are automatically injected into your AsciiDoc pages as Antora attributes.
+
+== The End-to-End Flow
+
+[source,text]
+----
+Infrastructure roles          Showroom role              Content repo
+─────────────────          ─────────────                ────────────
+                               │
+1. Write values to           2. Read user_data         3. Inject into
+   agnosticd_user_info  ──►     via lookup        ──►    antora.yml
+                               │                          attributes
+   bastion_public_hostname     │
+   keycloak_admin_user         │                       4. Available as
+   openshift_console_url       │                          {bastion_public_hostname}
+   ...                         │                          {keycloak_admin_user}
+                               │                          in your AsciiDoc
+----
+
+=== Step 1: Infrastructure roles write data
+
+During provisioning, infrastructure workloads write key-value pairs using the `agnosticd.core.agnosticd_user_info` module:
+
+[source,yaml]
+----
+- name: Publish bastion hostname
+  agnosticd.core.agnosticd_user_info:
+    data:
+      bastion_public_hostname: "bastion.abc123.example.com"
+      bastion_ssh_user_name: "lab-user"
+      bastion_ssh_password: "MyPassword123"
+----
+
+These values are stored in the AgnosticD `user_data` store and are available to all subsequent workloads.
+
+=== Step 2: Showroom reads user_data
+
+When the Showroom role runs, it loads the full `user_data` store:
+
+* **OCP4 role** -- calls `lookup('agnosticd.core.agnosticd_user_data', '*')` and merges the result into `_showroom_user_data`.
+* **VM role** -- loads `agnosticd_user_data` and injects values directly into `content/antora.yml` attributes.
+
+=== Step 3: Injection into Antora attributes
+
+The loaded values are passed to the Showroom content container (OCP4) or written into the Antora component descriptor (VM) as AsciiDoc attributes.
+
+=== Step 4: Use in your AsciiDoc pages
+
+In your content, reference the values as Antora attributes:
+
+[source,asciidoc]
+----
+== Connect to your bastion
+
+Open a terminal and SSH to the bastion host:
+
+[source,bash,subs="attributes"]
+ ssh {bastion_ssh_user_name}@{bastion_public_hostname}
+
+Password: `{bastion_ssh_password}`
+----
+
+The rendered page will show the actual hostname, username, and password for each participant.
+
+== Global vs Per-User Data
+
+=== Single-user deployments
+
+All `user_data` is global. Every key written by infrastructure roles is available as an attribute:
+
+[source,yaml]
+----
+# user_data (flat)
+bastion_public_hostname: bastion.abc123.example.com
+openshift_console_url: https://console.apps.cluster.example.com
+keycloak_admin_user: admin
+----
+
+=== Multi-user deployments
+
+In multi-user workshops, `user_data` contains both global keys and a `users` map:
+
+[source,yaml]
+----
+# user_data (multi-user)
+openshift_console_url: https://console.apps.cluster.example.com   # global
+keycloak_admin_user: admin                                        # global
+users:
+  user1:
+    bastion_ssh_password: password1
+    some_credential: value1
+  user2:
+    bastion_ssh_password: password2
+    some_credential: value2
+----
+
+The Showroom role creates one instance per user.
+Each user's instance receives the **merged** global + per-user data.
+For `user1`, the effective attributes are:
+
+[source,yaml]
+----
+openshift_console_url: https://console.apps.cluster.example.com
+keycloak_admin_user: admin
+bastion_ssh_password: password1
+some_credential: value1
+guid: abc123
+user: user1
+----
+
+Per-user keys override global keys of the same name.
+
+== Passthrough User Data
+
+Some environments need to forward provisioning data from a parent component to the Showroom content without the Showroom role needing to know about it.
+
+Set `ocp4_workload_showroom_passthrough_user_data: true` (OCP4 role) to copy `agnosticd_passthrough_user_data` into each user's entry before deployment.
+This is useful when chaining configurations where the parent writes arbitrary keys.
+
+== The User Data Seed Role
+
+The `ocp4_workload_showroom_user_data_seed` role lets you pre-populate structured data into `user_data` before Showroom runs.
+This is particularly useful for multi-user workshops where you need to seed per-user credentials:
+
+[source,yaml]
+----
+workloads:
+  - agnosticd.showroom.ocp4_workload_showroom_user_data_seed
+  - agnosticd.showroom.ocp4_workload_showroom
+
+ocp4_workload_showroom_user_data_seed:
+  openshift_console_url: https://console.apps.cluster.example.com
+  users:
+    user1:
+      password: generated-password-1
+    user2:
+      password: generated-password-2
+----
+
+The seed role writes these values into `user_data`, making them available to the main Showroom role and ultimately to your content.
+
+== Providing Defaults in antora.yml
+
+Your `content/antora.yml` should define sensible default values for all attributes you use.
+These defaults are used during local development and CI previews, and are overridden by real `user_data` at deploy time:
+
+[source,yaml]
+----
+asciidoc:
+  attributes:
+    guid: my-guid
+    bastion_public_hostname: bastion.example.com
+    bastion_ssh_user_name: lab-user
+    bastion_ssh_password: changeme
+    openshift_console_url: https://console.apps.example.com
+----
+
+TIP: If an attribute is referenced in your AsciiDoc but has no default and is not present in `user_data`, the raw `\{attribute_name}` text will appear in the rendered output. Always provide defaults.
+
+== Common Attributes
+
+These attributes are commonly available in `user_data` depending on your environment type:
+
+[cols="1,3",options="header"]
+|===
+|Attribute |Source
+
+|`guid`
+|Always present. The unique environment identifier.
+
+|`bastion_public_hostname`
+|Set by bastion provisioning or propagated from parent components.
+
+|`bastion_ssh_user_name`
+|Set by the `bastion` role or propagated.
+
+|`bastion_ssh_password`
+|Set by the `bastion` role or propagated.
+
+|`openshift_console_url`
+|Set by OpenShift provisioning roles.
+
+|`openshift_cluster_ingress_domain`
+|The apps domain for the OpenShift cluster.
+
+|`keycloak_admin_user` / `keycloak_admin_password`
+|Set by Keycloak/SSO workloads.
+
+|`user`
+|In multi-user mode, the current user identifier (e.g. `user1`).
+|===
+
+The exact set of available attributes depends on which infrastructure roles run before Showroom.
+Enable dev-mode (see xref:content-repo.adoc[]) to see all attributes available in your deployed environment.
+
+== Next Steps
+
+* xref:ui-config.adoc[] -- configure tabs, layout, and dynamic URLs.
+* xref:content-repo.adoc[] -- structure your content repo and use attributes effectively.

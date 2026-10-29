@@ -70,71 +70,11 @@ spec:
           instructions: {{ .Values.components.helloWorld.userInfo.instructions | quote }}
         deployer:
           domain: {{ .Values.deployer.domain | quote }}
-        showroom:
-          enabled: {{ .Values.components.showroom.enabled }}
-          namespace: {{ .Values.components.showroom.namespace }}
         operator:
           name: {{ .Values.components.operator.name }}
   destination:
     server: https://kubernetes.default.svc
     namespace: {{ .Values.components.helloWorld.namespace }}
-  syncPolicy:
-    automated:
-      prune: true
-      selfHeal: true
-    syncOptions:
-      - CreateNamespace=true
-{{- end }}
-
-{{- if .Values.components.showroom.enabled }}
----
-apiVersion: argoproj.io/v1alpha1
-kind: Application
-metadata:
-  name: {{ .Release.Name }}-showroom
-  namespace: {{ .Values.argocd.namespace }}
-  labels:
-    demo.redhat.com/application: "field-content"
-  finalizers:
-    - resources-finalizer.argocd.argoproj.io
-spec:
-  project: {{ .Values.argocd.project }}
-  source:
-    repoURL: {{ .Values.gitops.repoUrl }}
-    targetRevision: {{ .Values.gitops.revision }}
-    path: {{ .Values.gitops.basePath }}/components/showroom
-    helm:
-      valuesObject:
-        showroom:
-          enabled: {{ .Values.components.showroom.enabled }}
-          namespace: {{ .Values.components.showroom.namespace }}
-          name: {{ .Values.components.showroom.name }}
-          content:
-            repoUrl: {{ .Values.components.showroom.content.repoUrl | quote }}
-            repoRef: {{ .Values.components.showroom.content.repoRef | quote }}
-            antoraPlaybook: {{ .Values.components.showroom.content.antoraPlaybook | quote }}
-            image: {{ .Values.components.showroom.content.image | quote }}
-          nookbag:
-            enabled: {{ .Values.components.showroom.nookbag.enabled }}
-            bundleUrl: {{ .Values.components.showroom.nookbag.bundleUrl | quote }}
-          terminal:
-            enabled: {{ .Values.components.showroom.terminal.enabled }}
-            image: {{ .Values.components.showroom.terminal.image | quote }}
-            resources:
-              requests:
-                cpu: {{ .Values.components.showroom.terminal.resources.requests.cpu | quote }}
-                memory: {{ .Values.components.showroom.terminal.resources.requests.memory | quote }}
-              limits:
-                cpu: {{ .Values.components.showroom.terminal.resources.limits.cpu | quote }}
-                memory: {{ .Values.components.showroom.terminal.resources.limits.memory | quote }}
-        deployer:
-          domain: {{ .Values.deployer.domain | quote }}
-        demo:
-          namespace: {{ .Values.components.helloWorld.namespace }}
-          appName: {{ .Values.components.helloWorld.appName }}
-  destination:
-    server: https://kubernetes.default.svc
-    namespace: {{ .Values.components.showroom.namespace }}
   syncPolicy:
     automated:
       prune: true

@@ -10,8 +10,3 @@ collections:
   # General community modules
   - name: community.general
     version: ">=5.0.0,<10.0.0"
-
-  # NOTE: agnosticd.showroom and agnosticd.core are included locally
-  # in the collections/ directory to avoid external dependency issues.
-  # TODO: Update to use upstream collections when agnosticd.core is
-  # properly packaged and published.

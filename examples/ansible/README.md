@@ -19,7 +19,7 @@ ansible/
 ├── templates/            # Job, RBAC, ConfigMap templates
 └── playbooks/            # Your Ansible content
     ├── site.yml          # Main playbook with workflow
-    └── roles/            # Reusable roles (operator-install, deploy-showroom, etc.)
+    └── roles/            # Reusable roles (operator-install, etc.)
 ```
 
 ArgoCD deploys this as a Helm chart. The chart creates a Kubernetes Job that clones the playbooks and runs Ansible.
@@ -31,7 +31,6 @@ ArgoCD deploys this as a Helm chart. The chart creates a Kubernetes Job that clo
 | Web Terminal | Operator installed via OLM with wait-for-ready |
 | SSH Keypair | Generated and stored as Secret (demonstrates Ansible capability) |
 | Hello World | Sample httpd application |
-| Showroom | Lab guide with terminal |
 
 ## Configuration
 
@@ -45,7 +44,6 @@ ansible:
   playbook: "site.yml"
   extraVars:
     operator_name: "web-terminal"
-    showroom_git_repo: "https://github.com/your-org/your-lab.git"
 ```
 
 See comments in [values.yaml](values.yaml) and [playbooks/site.yml](playbooks/site.yml) for detailed documentation.

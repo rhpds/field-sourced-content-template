@@ -1,0 +1,137 @@
+= Contributing
+:navtitle: Contributing
+
+This page covers how to contribute to the Showroom platform -- the Ansible collection, Helm charts, container images, and the Nookbag UI.
+
+== Repository Map
+
+[cols="1,3",options="header"]
+|===
+|Repository |What to contribute
+
+|https://github.com/agnosticd/showroom[agnosticd/showroom]
+|Ansible roles, collection packaging, and this documentation.
+
+|https://github.com/rhpds/showroom-deployer[rhpds/showroom-deployer]
+|Helm charts (`showroom-single-pod`, `showroom`, `zerotouch`).
+
+|https://github.com/rhpds/showroom-images[rhpds/showroom-images]
+|Container image Dockerfiles and build pipelines.
+
+|https://github.com/rhpds/nookbag[rhpds/nookbag]
+|The zero-touch UI bundle (JavaScript/CSS).
+
+|https://github.com/rhpds/showroom_template_nookbag[rhpds/showroom_template_nookbag]
+|The content repository template.
+|===
+
+== Collection Versioning
+
+The collection follows semantic versioning. Tags are in the format `v\{major}.\{minor}.\{patch}` (e.g. `{showroom-collection-version}`).
+
+* **Patch** -- bug fixes, documentation updates, image version bumps.
+* **Minor** -- new features, new role variables, new tab service support.
+* **Major** -- breaking changes to role interfaces or behaviour.
+
+To create a release:
+
+[source,bash]
+----
+git tag v1.5.0
+git push origin v1.5.0
+----
+
+Catalog items reference the collection version in `requirements_content`:
+
+[source,yaml]
+----
+requirements_content:
+  collections:
+    - name: https://github.com/agnosticd/showroom.git
+      type: git
+      version: v1.5.0
+----
+
+== Testing with Test Catalog Items
+
+The `tests/` directory in https://github.com/rhpds/agnosticv[agnosticv] contains test catalog items specifically for validating Showroom changes:
+
+[cols="1,3",options="header"]
+|===
+|Catalog item |What it tests
+
+|https://github.com/rhpds/agnosticv/tree/main/tests/showroom-ocp4[tests/showroom-ocp4]
+|OCP4 deployment with Wetty terminal, OCP console embed, and the `ocp-example` branch.
+
+|https://github.com/rhpds/agnosticv/tree/main/tests/showroom-vm[tests/showroom-vm]
+|VM deployment with two terminals and the `vm-example` branch.
+|===
+
+These test items expose the `showroom_collection_version` as a catalog parameter, so you can test a specific branch or tag without modifying the config:
+
+. Push your changes to a branch on the collection repo.
+. Order the test catalog item from demo.redhat.com.
+. Set **Showroom Collection Version** to your branch name (e.g. `my-feature-branch`).
+. Verify the deployment works as expected.
+
+== Development Workflow
+
+=== Collection changes
+
+. Fork and clone https://github.com/agnosticd/showroom[agnosticd/showroom].
+. Make changes to roles, defaults, tasks, or templates.
+. Test locally using a standalone playbook if possible (see xref:ocp4-role-reference.adoc[OCP4 examples] or xref:vm-role-reference.adoc[VM examples]).
+. Test on the platform using the test catalog items.
+. Open a pull request.
+
+=== Content template changes
+
+. Fork and clone https://github.com/rhpds/showroom_template_nookbag[showroom_template_nookbag].
+. Create a new branch (the test catalog items can point to any branch).
+. Test locally with Podman (see xref:content-repo.adoc[]).
+. Test on the platform by updating the test catalog item's content ref.
+
+=== Helm chart changes
+
+. Fork and clone https://github.com/rhpds/showroom-deployer[showroom-deployer].
+. Edit charts under `charts/`.
+. Test with `helm template` and `oc apply -f -`.
+. PRs are automatically linted and tested by CI.
+
+=== Image changes
+
+. Fork and clone https://github.com/rhpds/showroom-images[showroom-images].
+. Edit the Dockerfile for the image you are changing.
+. Build and test locally:
++
+[source,bash]
+----
+cd content/
+podman build -t showroom-content:dev .
+----
+. Tag and push to trigger the CI pipeline:
++
+[source,bash]
+----
+git tag showroom-content-v1.5.0
+git push origin showroom-content-v1.5.0
+----
+
+== Documentation
+
+This documentation site is built with Antora from the `docs/` directory in the collection repo.
+
+To preview locally:
+
+[source,bash]
+----
+cd docs/
+podman run --rm -v $PWD:/antora -p 8080:8080 -i -t ghcr.io/juliaaano/antora-viewer
+----
+
+Documentation changes go through the same PR process as collection changes.
+
+== Getting Help
+
+* **Issues**: https://github.com/agnosticd/showroom/issues
+* **Discussions**: https://github.com/agnosticd/showroom/discussions

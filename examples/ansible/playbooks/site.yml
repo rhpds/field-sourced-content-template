@@ -1,5 +1,5 @@
 ---
-# Main Ansible Playbook - Install Web Terminal, Deploy Sample Application, and Showroom
+# Main Ansible Playbook - Install Web Terminal and Deploy Sample Application
 #
 # This playbook demonstrates Ansible's multi-step workflow capabilities:
 # 1. Install the Web Terminal operator (with wait-for-ready)
@@ -7,15 +7,14 @@
 # 3. Generate an SSH keypair (demonstrates capability Helm can't do)
 # 4. Deploy a sample httpd application
 # 5. Wait for deployment to be ready
-# 6. Deploy Showroom lab guide
-# 7. Create userinfo ConfigMap for RHDP (includes SSH private key)
+# 6. Create userinfo ConfigMap for RHDP (includes SSH private key)
 #
 # Variables automatically provided by ansible-runner:
 #   - cluster_domain: The cluster's apps domain
 #   - cluster_api_url: The Kubernetes API URL
 #   - namespace: The namespace where the job runs
 
-- name: Deploy Web Terminal with Sample Application and Showroom
+- name: Deploy Web Terminal with Sample Application
   hosts: localhost
   connection: local
   gather_facts: false
@@ -30,11 +29,6 @@
     _demo_namespace: "{{ demo_namespace | default('terminal-demo') }}"
     _app_name: "{{ app_name | default('hello-world') }}"
     _app_image: "{{ app_image | default('registry.redhat.io/ubi8/httpd-24:latest') }}"
-
-    # Showroom settings
-    _showroom_git_repo: "{{ showroom_git_repo | default('https://github.com/rhpds/showroom_template_nookbag.git') }}"
-    _showroom_git_ref: "{{ showroom_git_ref | default('main') }}"
-    _guid: "{{ guid | default('demo') }}"
 
   tasks:
     # =========================================================================
@@ -108,7 +102,6 @@
           - "Channel: {{ _operator_channel }}"
           - "Demo Namespace: {{ _demo_namespace }}"
           - "Demo App: {{ _app_name }}"
-          - "Showroom Repo: {{ _showroom_git_repo }}"
           - "Cluster: {{ cluster_domain }}"
 
     # Step 1: Install the operator
@@ -219,17 +212,7 @@
       ansible.builtin.debug:
         msg: "Application {{ _app_name }} is running and ready!"
 
-    # Step 5: Deploy Showroom lab guide
-    - name: Deploy Showroom
-      vars:
-        showroom_guid: "{{ _guid }}"
-        showroom_deployer_domain: "{{ cluster_domain }}"
-        showroom_content_git_repo: "{{ _showroom_git_repo }}"
-        showroom_content_git_repo_ref: "{{ _showroom_git_ref }}"
-      ansible.builtin.include_role:
-        name: deploy-showroom
-
-    # Step 7: Create userinfo ConfigMap for RHDP (includes SSH private key)
+    # Step 6: Create userinfo ConfigMap for RHDP (includes SSH private key)
     - name: Create userinfo ConfigMap
       kubernetes.core.k8s:
         state: present
@@ -244,12 +227,11 @@
               demo.redhat.com/application: "web-terminal"
           data:
             demo_title: "Web Terminal Demo"
-            access_instructions: "Access the Showroom lab guide at {{ showroom_url }} - Click the terminal icon (>_) in the OpenShift console to use the Web Terminal."
+            access_instructions: "Click the terminal icon (>_) in the OpenShift console to use the Web Terminal."
             deployment_type: "ansible"
             operator_name: "{{ _operator_name }}"
             demo_app: "{{ _app_name }}"
             demo_namespace: "{{ _demo_namespace }}"
-            showroom_url: "{{ showroom_url }}"
             cluster_domain: "{{ cluster_domain }}"
             ssh_private_key: "{{ ssh_private_key }}"
 
@@ -259,5 +241,4 @@
           - "=== Deployment Complete ==="
           - "Operator: {{ _operator_name }} installed and ready"
           - "Application: {{ _app_name }} deployed in {{ _demo_namespace }}"
-          - "Showroom: {{ showroom_url }}"
           - "Web Terminal: Click the (>_) icon in the OpenShift console"
