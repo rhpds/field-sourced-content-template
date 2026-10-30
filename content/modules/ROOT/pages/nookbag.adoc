@@ -1,0 +1,81 @@
+= Nookbag UI
+:navtitle: Nookbag UI
+
+https://github.com/rhpds/nookbag[Nookbag] is the zero-touch UI bundle that provides the split-pane Showroom interface: lab content on the left, interactive tabs on the right.
+
+== What It Does
+
+Nookbag is a JavaScript/CSS bundle that:
+
+* Renders the split-pane layout with a resizable divider.
+* Creates tabbed panels in the right pane (terminals, consoles, external URLs).
+* Reads `ui-config.yml` to determine which tabs to show and how to configure them.
+* Supports dynamic variable substitution in tab URLs (`$\{DOMAIN}`, `$\{GUID}`).
+* Persists user preferences (active tab, pane width) across page refreshes.
+
+== How It Is Consumed
+
+Nookbag is distributed as a ZIP bundle, hosted as a GitHub release artifact.
+The Showroom roles download and inject it at deploy time:
+
+=== OCP4 Role
+
+[source,yaml]
+----
+ocp4_workload_showroom_zero_touch_bundle: >-
+  https://github.com/rhpds/nookbag/releases/download/nookbag-v0.3.2/nookbag-v0.3.2.zip
+
+ocp4_workload_showroom_zero_touch_ui_enabled: true
+----
+
+=== VM Role
+
+[source,yaml]
+----
+showroom_ui: zero-touch
+
+showroom_ui_zero_bundle: >-
+  https://github.com/rhpds/nookbag/releases/download/nookbag-v0.3.2/nookbag-v0.3.2.zip
+----
+
+Content developers do not normally need to change these settings.
+They are pinned to a tested version in the role defaults and only need updating when adopting a new Nookbag release.
+
+== Relationship to the Content Theme
+
+Nookbag is separate from the Antora UI theme.
+The Antora UI bundle (e.g. `rhdp_showroom_theme`) controls the styling of the **content pane** (fonts, colours, admonition blocks, etc.), while Nookbag controls the **outer shell** (split pane, tabs, pane resizing).
+
+[source,text]
+----
+┌─────────────────────────────────────────────────┐
+│                 Nookbag UI Shell                │
+│                                                 │
+│  ┌──────────────────┐  ┌────────────────────┐  │
+│  │ Content Pane     │  │ Tab Pane           │  │
+│  │ (Antora theme)   │  │ (Nookbag tabs)     │  │
+│  │                  │  │                    │  │
+│  │ - Lab text       │  │ - Terminal         │  │
+│  │ - Code blocks    │  │ - OCP Console      │  │
+│  │ - Images         │  │ - External URLs    │  │
+│  │                  │  │                    │  │
+│  └──────────────────┘  └────────────────────┘  │
+└─────────────────────────────────────────────────┘
+----
+
+== Versioning
+
+Nookbag releases follow the `nookbag-v\{major}.\{minor}.\{patch}` tag format (e.g. `nookbag-v0.3.0`).
+The release artifact is a ZIP file at:
+
+----
+https://github.com/rhpds/nookbag/releases/download/nookbag-v0.3.2/nookbag-v0.3.2.zip
+----
+
+When a new version is released, update the bundle URL in the Showroom collection role defaults.
+
+== Further Reading
+
+* https://github.com/rhpds/nookbag[Source repository]
+* xref:ui-config.adoc[] -- how to configure the tabs and layout that Nookbag renders.
+* xref:architecture.adoc[] -- how Nookbag fits into the overall system.

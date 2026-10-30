@@ -16,8 +16,5 @@ data:
   operator_name: {{ .Values.operator.name | quote }}
   demo_app: {{ .Values.demo.appName | quote }}
   demo_namespace: {{ .Values.demo.namespace | quote }}
-  {{- if .Values.showroom.enabled }}
-  showroom_url: "https://showroom.{{ .Values.deployer.domain }}"
-  {{- end }}
   cluster_domain: "{{ .Values.deployer.domain }}"
 {{- end }}

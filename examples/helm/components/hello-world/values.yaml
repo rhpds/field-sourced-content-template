@@ -10,16 +10,11 @@ demo:
 userInfo:
   enabled: true
   title: "Web Terminal Demo"
-  instructions: "Access the Showroom lab guide, then click the terminal icon (>_) in the OpenShift console."
+  instructions: "Click the terminal icon (>_) in the OpenShift console to use the Web Terminal."
 
 # Injected by parent chart
 deployer:
   domain: ""
-
-# For userinfo showroom_url
-showroom:
-  enabled: true
-  namespace: showroom
 
 # For userinfo operator_name
 operator:

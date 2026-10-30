@@ -1,0 +1,758 @@
+= Creating a Content Repository
+:navtitle: Creating a Content Repository
+
+A Showroom content repository is an https://antora.org[Antora] project that contains your lab instructions written in AsciiDoc.
+The Showroom platform clones, builds, and serves this content at runtime.
+
+== Start from the Template
+
+The recommended starting point is https://github.com/rhpds/showroom_template_nookbag[showroom_template_nookbag].
+
+. In GitHub, click **Use this template** to create a new repository.
+Suggested naming: `showroom_<lab-name>` (for example `showroom_my-ansible-workshop`).
+. Clone your new repo locally.
+. Replace the sample pages in `content/modules/ROOT/pages/` with your own content.
+
+The template gives you a clean structure with zero boilerplate and the Red Hat Demo Platform UI theme.
+
+== Directory Layout
+
+[source,text]
+----
+your-content-repo/
+├── content/
+│   ├── antora.yml              <1>
+│   ├── supplemental-ui/        <2>
+│   │   └── partials/
+│   └── modules/ROOT/
+│       ├── nav.adoc            <3>
+│       ├── assets/images/      <4>
+│       ├── examples/           <5>
+│       ├── pages/              <6>
+│       │   ├── index.adoc
+│       │   ├── module-01.adoc
+│       │   └── module-02.adoc
+│       └── partials/           <7>
+├── site.yml                    <8>
+└── ui-config.yml               <9>
+----
+<1> Antora component descriptor -- defines the component name, version, navigation, and default AsciiDoc attributes.
+<2> Custom CSS or HTML partials that override the UI theme.
+<3> Navigation file -- controls the sidebar table of contents.
+<4> Images referenced from your AsciiDoc pages.
+<5> Downloadable files (scripts, configs) that readers can copy.
+<6> Your lab pages -- one AsciiDoc file per module or section.
+<7> Reusable AsciiDoc snippets you can include inline.
+<8> Antora playbook -- do not modify; uses the Red Hat theme and extension settings managed by the template.
+<9> Showroom UI configuration -- defines tabs, layout width, and dynamic URLs.
+See xref:ui-config.adoc[].
+
+== The Antora Component Descriptor (`antora.yml`)
+
+The `content/antora.yml` file is the heart of your Antora component.
+Here is a minimal example:
+
+[source,yaml]
+----
+name: modules
+title: My Workshop Title
+version: master
+nav:
+  - modules/ROOT/nav.adoc
+
+asciidoc:
+  attributes:
+    lab_name: My Workshop
+    guid: '%GUID%'
+    ssh_user: lab-user
+    ssh_password: changeme
+    page-pagination: true
+----
+
+=== AsciiDoc Attributes and Variable Injection
+
+At deploy time, Showroom replaces attribute placeholders with real runtime values from `user_data`.
+This means you can write:
+
+[source,asciidoc]
+----
+SSH to the bastion:
+
+[source,bash,subs="attributes"]
+ ssh {ssh_user}@{bastion_public_hostname}
+----
+
+And the rendered page will show the actual username and hostname for each lab participant.
+
+The full list of available attributes depends on what your infrastructure roles write into `user_data`.
+See xref:user-data.adoc[] for the complete flow.
+
+TIP: Provide sensible defaults in `antora.yml` so the content renders correctly during local development and in CI previews.
+See the xref:attribute-example.adoc[] page for a live demonstration of attribute injection.
+
+== Antora Playbook (`site.yml`)
+
+Your content repo needs an Antora playbook file -- typically `site.yml`.
+This file tells Antora where to find your content, which UI theme to use, and where to write the output.
+
+IMPORTANT: Do not modify `site.yml`.
+It contains settings that must not change -- the UI theme, extensions, and output path are managed by the template.
+All content-specific configuration (AsciiDoc attributes, navigation, component metadata) belongs in `content/antora.yml`.
+
+The Showroom Antora container image auto-detects the playbook at build time, preferring `site.yml` and falling back to `default-site.yml`.
+You can override the filename in your AgnosticV config:
+
+[source,yaml]
+----
+ocp4_workload_showroom_content_antora_playbook: site.yml
+----
+
+== Navigation (`nav.adoc`)
+
+The `content/modules/ROOT/nav.adoc` file defines the sidebar navigation:
+
+[source,asciidoc]
+----
+* xref:index.adoc[Lab Overview]
+
+* xref:module-01.adoc[1. Getting Started]
+* xref:module-02.adoc[2. Deploy the Application]
+----
+
+Pages not listed in `nav.adoc` are still accessible by URL but will not appear in the sidebar (unless dev-mode is enabled).
+
+== Dev Mode
+
+Dev mode is a built-in diagnostic tool that every content developer should enable during development.
+When active, it:
+
+* Adds an **Attributes** reference page listing every AsciiDoc attribute and its current value -- invaluable for verifying that variable injection works correctly.
+* Shows **unlisted pages** (pages not in `nav.adoc`) in the sidebar under a _Dev Mode_ section, so you can navigate to work-in-progress pages without adding them to the navigation yet.
+
+=== Enabling dev mode
+
+Add a single line to your catalog item's `dev.yaml`:
+
+[cols="1a,1a",options="header"]
+|===
+|OCP4 workload |VM workload
+
+|
+[source,yaml]
+----
+ocp4_workload_showroom_enable_dev_mode: true
+----
+|
+[source,yaml]
+----
+showroom_enable_dev_mode: true
+----
+|===
+
+IMPORTANT: Always enable dev mode in `dev.yaml`, *never* in `common.yaml` or `prod.yaml`.
+It is a development-time aid and must not be visible to end users in production.
+
+TIP: The working examples in `tests/showroom-ocp4/dev.yaml` and `tests/showroom-vm/dev.yaml` in agnosticv both enable dev mode -- use them as a reference.
+
+You can also expose dev mode as a catalog parameter so it can be toggled from the demo.redhat.com order form.
+See xref:ocp4-role-reference.adoc#_dev_mode[OCP4 Dev Mode] or xref:vm-role-reference.adoc#_dev_mode[VM Dev Mode] for the full variable reference and catalog parameter examples.
+
+=== In local development
+
+Dev mode is not available when running Antora locally.
+The `dev-mode.js` extension is bundled inside the Showroom Antora container image and injected at build time -- it is not part of the content repository.
+
+To verify your AsciiDoc attributes locally, inspect `content/antora.yml` directly or deploy to RHDP with dev mode enabled.
+
+== Local Development
+
+=== Option 1: Podman / Docker (recommended)
+
+[source,bash]
+----
+cd your-content-repo
+podman run --rm --name antora -v $PWD:/antora -p 8080:8080 -i -t ghcr.io/juliaaano/antora-viewer
+----
+
+On SELinux-enabled systems, append `:z` to the volume mount:
+
+[source,bash]
+----
+podman run --rm --name antora -v $PWD:/antora:z -p 8080:8080 -i -t ghcr.io/juliaaano/antora-viewer
+----
+
+Open http://localhost:8080 in your browser.
+Live reload is not supported -- stop and restart the container after making changes.
+
+=== Option 2: Podman Compose (live reload)
+
+If your template includes a `podman-compose.yaml`:
+
+[source,bash]
+----
+podman-compose up --build
+----
+
+Open http://localhost:8080. Edit content files and refresh the browser to see changes.
+
+=== Option 3: Local Antora CLI
+
+If you have Node.js and Antora installed:
+
+[source,bash]
+----
+./utilities/lab-build      # build HTML
+./utilities/lab-serve      # serve on http://localhost:8080
+----
+
+== Adding External Links
+
+You can add links to external resources (documentation, product pages, etc.) in the Showroom UI links dropdown.
+Add them to `content/antora.yml`:
+
+[source,yaml]
+----
+asciidoc:
+  attributes:
+    page-links:
+      - url: https://docs.redhat.com
+        text: Red Hat Documentation
+      - url: https://access.redhat.com
+        text: Red Hat Customer Portal
+----
+
+== Extensions
+
+Showroom provides Antora extensions that add rich content features to your lab pages.
+Register them in the `antora.extensions` section of your `site.yml` playbook.
+
+=== Mermaid Diagrams
+
+The https://github.com/sntke/antora-mermaid-extension[Mermaid extension] lets you embed diagrams and visualizations written in text directly in your AsciiDoc pages.
+
+[source,yaml]
+----
+antora:
+  extensions:
+    - require: '@sntke/antora-mermaid-extension' # <1>
+      mermaid_library_url: https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs # <2>
+      script_stem: header-scripts # <3>
+      mermaid_initialize_options: # <4>
+        start_on_load: true
+----
+<1> The Antora extension package (pre-installed in the Showroom Antora image).
+<2> The Mermaid JS library loaded by the browser.
+<3> Injects the script tag into the HTML `<head>`.
+<4> Mermaid initialisation options -- `start_on_load` renders diagrams automatically.
+
+Then use a `[mermaid]` block in your AsciiDoc pages:
+
+[source,asciidoc]
+----
+[mermaid]
+\....
+sequenceDiagram
+autonumber
+
+participant a as Alice
+participant b as Bob
+
+a ->>+ b : Hello.
+b -->>- a : Hi, there.
+\....
+----
+
+The diagram above renders as:
+
+[mermaid]
+....
+sequenceDiagram
+autonumber
+
+participant a as Alice
+participant b as Bob
+
+a ->>+ b : Hello.
+b -->>- a : Hi, there.
+....
+
+=== Tabs
+
+The https://github.com/asciidoctor/asciidoctor-tabs[Tabs extension] adds tabbed content blocks to your pages -- useful for showing alternative instructions (e.g. different operating systems, tools, or approaches) without cluttering the page.
+
+The https://www.npmjs.com/package/@andrew-jones/antora-tabs-extension[`@andrew-jones/antora-tabs-extension`] wraps the upstream `@asciidoctor/tabs` package and automatically registers the Asciidoctor extension and injects the required CSS and JS assets into the UI.
+No supplemental files or partial overrides are needed.
+
+[source,yaml]
+----
+antora:
+  extensions:
+    - require: '@andrew-jones/antora-tabs-extension' # <1>
+----
+<1> The npm package is pre-installed in the Showroom Antora container image.
+
+Then use `[tabs]` blocks in your AsciiDoc pages:
+
+[source,asciidoc]
+----
+[tabs]
+====
+Linux::
++
+[source,bash]
+ sudo dnf install -y podman
+
+macOS::
++
+[source,bash]
+ brew install podman
+
+Windows::
++
+[source,powershell]
+ winget install RedHat.Podman
+====
+----
+
+The block above renders as:
+
+[tabs]
+====
+Linux::
++
+[source,bash]
+----
+sudo dnf install -y podman
+----
+
+macOS::
++
+[source,bash]
+----
+brew install podman
+----
+
+Windows::
++
+[source,powershell]
+----
+winget install RedHat.Podman
+----
+====
+
+Tabs with the same labels are synchronised across the page -- clicking "macOS" in one block selects "macOS" everywhere.
+
+=== Using Multiple Extensions
+
+Register all extensions together in `site.yml`:
+
+[source,yaml]
+----
+antora:
+  extensions:
+    - require: '@sntke/antora-mermaid-extension'
+      mermaid_library_url: https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs
+      script_stem: header-scripts
+      mermaid_initialize_options:
+        start_on_load: true
+    - require: '@andrew-jones/antora-tabs-extension'
+----
+
+== AsciiDoc Experimental Features (UI Macros)
+
+The `experimental` AsciiDoc attribute unlocks three UI macros for documenting user interactions: **buttons**, **keyboard shortcuts**, and **menu selections**.
+These render with distinct styling so readers can instantly recognise interactive elements.
+
+=== Enabling `experimental`
+
+Add `experimental: true` to the `asciidoc.attributes` section of your `content/antora.yml`:
+
+[source,yaml]
+----
+asciidoc:
+  attributes:
+    experimental: true
+----
+
+NOTE: The template already includes `experimental: true` in the default `content/antora.yml`.
+In AsciiDoc, setting an attribute to an empty string (`''`) is equivalent to `true` -- both forms activate the experimental macros.
+
+=== Button Macro -- `btn:[]`
+
+Use the button macro to represent a clickable UI button.
+
+[cols="1a,1a",options="header"]
+|===
+| AsciiDoc source | Rendered output
+
+|
+[source,asciidoc]
+----
+Press btn:[Save] to commit your changes.
+----
+| Press btn:[Save] to commit your changes.
+
+|
+[source,asciidoc]
+----
+Click btn:[OK] or btn:[Cancel].
+----
+| Click btn:[OK] or btn:[Cancel].
+|===
+
+=== Keyboard Macro -- `kbd:[]`
+
+Use the keyboard macro to display key presses and shortcuts.
+Separate individual keys with `+`.
+
+[cols="1a,1a",options="header"]
+|===
+| AsciiDoc source | Rendered output
+
+|
+[source,asciidoc]
+----
+Press kbd:[Enter] to confirm.
+----
+| Press kbd:[Enter] to confirm.
+
+|
+[source,asciidoc]
+----
+Copy text with kbd:[Ctrl+C] and paste
+with kbd:[Ctrl+V].
+----
+| Copy text with kbd:[Ctrl+C] and paste with kbd:[Ctrl+V].
+
+|
+[source,asciidoc]
+----
+On macOS, use kbd:[⌘+Shift+P] to open
+the command palette.
+----
+| On macOS, use kbd:[⌘+Shift+P] to open the command palette.
+
+|
+[source,asciidoc]
+----
+Press kbd:[Ctrl+Alt+Delete] to open
+the security screen.
+----
+| Press kbd:[Ctrl+Alt+Delete] to open the security screen.
+|===
+
+=== Menu Macro -- `menu:[]`
+
+Use the menu macro to describe a sequence of menu selections.
+The top-level menu goes before the colon; submenus and the final item go inside the square brackets, separated by `>`.
+
+[cols="1a,1a",options="header"]
+|===
+| AsciiDoc source | Rendered output
+
+|
+[source,asciidoc]
+----
+Select menu:File[Save].
+----
+| Select menu:File[Save].
+
+|
+[source,asciidoc]
+----
+Navigate to menu:File[New > Project]
+to create a new project.
+----
+| Navigate to menu:File[New > Project] to create a new project.
+
+|
+[source,asciidoc]
+----
+Open menu:Edit[Preferences > Plugins]
+to manage extensions.
+----
+| Open menu:Edit[Preferences > Plugins] to manage extensions.
+
+|
+[source,asciidoc]
+----
+Go to menu:View[Appearance > Color Theme]
+to change the editor theme.
+----
+| Go to menu:View[Appearance > Color Theme] to change the editor theme.
+|===
+
+=== Quick Reference
+
+[cols="1,2,2",options="header"]
+|===
+| Macro | Syntax | Example output
+
+| Button
+| `\btn:[Label]`
+| btn:[Save]
+
+| Keyboard (single key)
+| `\kbd:[Key]`
+| kbd:[Esc]
+
+| Keyboard (combo)
+| `\kbd:[Key1+Key2]`
+| kbd:[Ctrl+S]
+
+| Keyboard (three keys)
+| `\kbd:[Key1+Key2+Key3]`
+| kbd:[Ctrl+Shift+T]
+
+| Menu (one level)
+| `\menu:Top[Item]`
+| menu:File[Save]
+
+| Menu (nested)
+| `\menu:Top[Sub > Item]`
+| menu:File[Export > PDF]
+|===
+
+== Execute in Terminal
+
+The Showroom theme includes an optional "Run in terminal" button for code blocks.
+When enabled, the button sends the code directly to the active terminal tab -- readers can execute commands with a single click instead of copy-pasting.
+
+=== Usage
+
+Add the `execute` role to any source block you want to be runnable.
+There are two equivalent syntaxes:
+
+**Option 1: Role on the source directive**
+
+[source,asciidoc]
+-----
+[source,bash,role="execute"]
+----
+cat /etc/issue
+----
+-----
+
+**Option 2: Shorthand role annotation**
+
+[source,asciidoc]
+-----
+[.execute]
+[source,bash]
+----
+cat /etc/issue
+----
+-----
+
+Both produce the same result:
+
+[.execute]
+[source,bash]
+----
+cat /etc/issue
+----
+
+Hovering over the code block shows two buttons: the standard **Copy** icon and a **terminal** icon.
+Clicking the terminal icon sends the command to the active terminal tab and presses Enter.
+
+=== When to Use It
+
+Use `.execute` for commands that are safe to run as-is and don't require the reader to edit them first.
+Avoid it for commands containing placeholders the reader must replace:
+
+[cols="1a,1a",options="header"]
+|===
+| Good -- use `.execute` | Bad -- do not use `.execute`
+
+|
+[source,asciidoc]
+-----
+[source,bash,role="execute"]
+----
+oc whoami
+----
+-----
+
+or equivalently:
+
+[source,asciidoc]
+-----
+[.execute]
+[source,bash]
+----
+oc whoami
+----
+-----
+|
+[source,asciidoc]
+-----
+[source,bash]
+----
+ssh <your-username>@bastion.example.com
+----
+-----
+|===
+
+TIP: Combine `.execute` with AsciiDoc attribute substitution so the command is ready to run.
+For example, `oc login -u \{ssh_user}` with `subs="attributes"` lets the command include the participant's actual username.
+
+=== Split Terminal Layouts
+
+Showroom supports split terminal tabs where the right pane is divided into a **top** and **bottom** terminal.
+This is configured in `ui-config.yml` using the `secondary_name`, `secondary_path`, and `secondary_port` properties on a tab:
+
+[source,yaml]
+----
+tabs:
+  - name: Terminals
+    path: /wetty
+    port: 443
+    secondary_name: Worker
+    secondary_path: /wetty
+    secondary_port: 443
+----
+
+See xref:ui-config.adoc#_two_terminals_stacked[Two Terminals (Stacked)] for the full configuration reference.
+
+When a split tab is active, the execute roles let you target a specific half:
+
+[cols="1,3",options="header"]
+|===
+|Role |Target
+
+|`.execute`
+|Top / primary terminal (or the only terminal in a non-split tab). Alias for `.execute-top`.
+
+|`.execute-top`
+|Top / primary terminal explicitly. Identical to `.execute`.
+
+|`.execute-bottom`
+|Bottom / secondary terminal in a split tab.
+
+|`.execute-top.execute-bottom`
+|Both -- two buttons, one for each terminal.
+|===
+
+==== Targeting the top terminal
+
+For the top terminal, `.execute` and `.execute-top` are interchangeable.
+Use whichever reads more clearly in context -- `.execute` is shorter for single-terminal tabs, `.execute-top` is more explicit when split terminals are in play:
+
+[source,asciidoc]
+-----
+[source,bash,role="execute-top"]
+----
+oc get pods
+----
+-----
+
+Rendered output:
+
+[.execute-top]
+[source,bash]
+----
+oc get pods
+----
+
+==== Targeting the bottom terminal
+
+Use `.execute-bottom` to send a command to the secondary terminal:
+
+[source,asciidoc]
+-----
+[source,bash,role="execute-bottom"]
+----
+tail -f /var/log/messages
+----
+-----
+
+The button for the bottom terminal shows a **2** badge so readers can tell the two apart.
+
+Rendered output:
+
+[.execute-bottom]
+[source,bash]
+----
+tail -f /var/log/messages
+----
+
+==== Targeting both terminals
+
+Combine both roles on one block to render two execute buttons -- useful when you want the reader to run the same command in both terminals:
+
+[source,asciidoc]
+-----
+[.execute-top.execute-bottom]
+[source,bash]
+----
+oc get nodes
+----
+-----
+
+Or with inline role syntax:
+
+[source,asciidoc]
+-----
+[source,bash,role="execute-top execute-bottom"]
+----
+oc get nodes
+----
+-----
+
+Rendered output:
+
+[.execute-top.execute-bottom]
+[source,bash]
+----
+oc get nodes
+----
+
+==== What happens on a non-split tab?
+
+If the active tab is a single terminal (no `secondary_*` config), `.execute-bottom` gracefully falls back to the primary terminal.
+Content is portable -- you don't need separate pages for split and non-split layouts.
+
+=== Without `.execute`
+
+A regular code block without the role gets only the copy button -- no terminal injection:
+
+[source,bash]
+----
+echo "This block only has copy"
+----
+
+=== How It Works
+
+The execute roles (`.execute`, `.execute-top`, `.execute-bottom`) add corresponding CSS classes to the listing block's wrapper `div`.
+The theme JavaScript detects these classes and adds "Run in terminal" buttons that dispatch the code as keyboard input to the matching terminal iframe in the active tab.
+
+== Creating Content with AI Tools
+
+The https://github.com/rhpds/rhdp-skills-marketplace[RHDP Skills Marketplace] provides skills for generating and validating Showroom content using Claude Code or Cursor IDE.
+
+Install the marketplace skills, then use:
+
+[cols="1,2",options="header"]
+|===
+| Skill | What it does
+
+| `/showroom:create-lab`
+| Generate workshop modules from reference materials with AsciiDoc formatting.
+
+| `/showroom:create-demo`
+| Generate presenter-led demo content with Know/Show structure.
+
+| `/showroom:verify-content`
+| Validate content against Red Hat standards (style, AsciiDoc, scaffold files).
+
+| `/showroom:blog-generate`
+| Convert completed modules into blog posts.
+|===
+
+See the https://github.com/rhpds/rhdp-skills-marketplace[RHDP Skills Marketplace README] for setup instructions.
+
+== Next Steps
+
+* xref:ui-config.adoc[] -- configure the tab layout, terminal tabs, and embedded consoles.
+* xref:agnosticv-config.adoc[] -- wire your content repo into an AgnosticV catalog item.
+* xref:user-data.adoc[] -- understand how runtime variables become AsciiDoc attributes.

@@ -1,0 +1,77 @@
+= Attribute Injection Example
+:navtitle: Attribute Injection Example
+
+This page demonstrates how AsciiDoc attribute injection works in Showroom.
+The values shown below are resolved from `content/antora.yml` attributes during local development, and from `user_data` at deploy time.
+
+== Environment Info
+
+[cols="1,2",options="header"]
+|===
+|Attribute |Rendered Value
+
+|`guid`
+|{guid}
+
+|`bastion_public_hostname`
+|{bastion_public_hostname}
+
+|`bastion_ssh_user_name`
+|{bastion_ssh_user_name}
+
+|`bastion_ssh_password`
+|{bastion_ssh_password}
+
+|`openshift_console_url`
+|{openshift_console_url}
+
+|`openshift_cluster_ingress_domain`
+|{openshift_cluster_ingress_domain}
+
+|`showroom-collection-version`
+|{showroom-collection-version}
+|===
+
+== Copyable Command Blocks
+
+Use `subs="attributes"` on source blocks to inject values into commands your users can copy-paste.
+
+=== SSH to the Bastion
+
+[source,bash,subs="attributes"]
+----
+ssh {bastion_ssh_user_name}@{bastion_public_hostname}
+----
+
+Password: `{bastion_ssh_password}`
+
+=== Open the OpenShift Console
+
+Visit the console at:
+
+{openshift_console_url}
+
+=== curl an App on the Cluster
+
+[source,bash,subs="attributes"]
+----
+curl -sk https://my-app.{openshift_cluster_ingress_domain}/api/health
+----
+
+== Inline Usage
+
+You can reference attributes inline in regular prose.
+Your environment GUID is *{guid}* and the bastion is reachable at *{bastion_public_hostname}*.
+
+== How It Works
+
+In your AsciiDoc source, you write attribute references with curly braces:
+
+[source,asciidoc]
+----
+ssh \{bastion_ssh_user_name}@\{bastion_public_hostname}
+----
+
+At build time, Antora replaces them with the values defined in `content/antora.yml` (local dev) or injected from `user_data` (deployed environment).
+
+TIP: Always provide sensible defaults in `content/antora.yml` so your content renders correctly during local development. See xref:user-data.adoc[] for the full injection flow.

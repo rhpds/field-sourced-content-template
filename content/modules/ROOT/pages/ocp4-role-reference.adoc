@@ -1,0 +1,448 @@
+= OCP4 Role Reference
+:navtitle: OCP4 Role Reference
+
+`ocp4_workload_showroom` deploys a complete Showroom instance to an OpenShift 4 cluster using a Helm chart.
+It is designed for AgnosticD environments but can also be used in standalone playbooks.
+
+== What It Does
+
+When `ACTION=provision` (or `create`):
+
+. Validates required inputs (`guid`, content Git repo, apps domain).
+. Loads `user_data` (including optional per-user entries) via `agnosticd.core.agnosticd_user_data`.
+. Creates one or more namespaces (`showroom-<guid>` or `showroom-<guid>-<user>`).
+. Renders the Showroom Helm chart with your content and terminal configuration.
+. Applies the rendered manifests to the cluster.
+. Waits for the Showroom pod to be running with all containers ready.
+. Discovers the Showroom `Route` and writes the URL into AgnosticD `user_info`.
+
+When `ACTION=destroy` (or `remove`): deletes the Showroom namespace(s), letting Kubernetes garbage-collect all resources.
+
+== Required Inputs
+
+[cols="1,1,3",options="header"]
+|===
+|Variable |Type |Description
+
+|`guid`
+|string
+|Unique identifier for this deployment. Used in namespace names (e.g. `showroom-<guid>`).
+
+|`ocp4_workload_showroom_content_git_repo`
+|string
+|Git repository URL containing Antora content to render.
+
+|`openshift_cluster_ingress_domain` or `sandbox_openshift_apps_domain`
+|string
+|Apps domain for the OpenShift route (e.g. `apps.cluster.example.com`). At least one must be set.
+
+|`ACTION`
+|string
+|Lifecycle action: `provision` / `create` to deploy, `destroy` / `remove` to tear down.
+|===
+
+== Core Settings
+
+[cols="1,1,1,3",options="header"]
+|===
+|Variable |Type |Default |Description
+
+|`ocp4_workload_showroom_name`
+|string
+|`showroom`
+|Base name for Showroom resources.
+
+|`ocp4_workload_showroom_namespace`
+|string
+|`showroom-{{ guid \| default('00000') }}`
+|Base namespace. In multi-user mode each user gets `<namespace>-<user>`.
+
+|`ocp4_workload_showroom_content_title`
+|string
+|`Showroom`
+|HTML page title for the lab interface.
+|===
+
+== Content Configuration
+
+[cols="1,1,1,3",options="header"]
+|===
+|Variable |Type |Default |Description
+
+|`ocp4_workload_showroom_content_git_repo`
+|string
+|`https://github.com/rhpds/showroom_template_default.git`
+|Antora content repository to clone.
+
+|`ocp4_workload_showroom_content_git_repo_ref`
+|string
+|`main`
+|Git branch, tag, or commit to use.
+
+|`ocp4_workload_showroom_content_antora_playbook`
+|string
+|`default-site.yml`
+|Antora playbook file inside the content repo.
+
+|`ocp4_workload_showroom_content_image`
+|string
+|`quay.io/rhpds/showroom-content:{showroom-collection-version}`
+|Container image that clones and renders the Antora content.
+
+|`ocp4_workload_showroom_content_only`
+|boolean
+|`false`
+|If `true`, only the content pane is shown (no terminals or VNC tabs).
+
+|`ocp4_workload_showroom_content_ui_config`
+|string
+|`""`
+|Override `ui-config.yml` for the content container. JSON or YAML string. Empty means use the repo default.
+
+|`ocp4_workload_showroom_antora_image`
+|string
+|`quay.io/rhpds/antora:v1.2.0`
+|Antora builder image used in the init container.
+|===
+
+== Dev Mode
+
+Dev mode adds diagnostic features to Showroom that are useful during content development.
+Currently, it controls the Antora dev-mode extension, which adds an _Attributes_ reference page and displays unlisted pages in the navigation.
+Future container-level dev-mode flags will follow the same pattern.
+
+=== Master Toggle
+
+Set the master toggle to enable dev mode for *all* Showroom containers at once:
+
+[source,yaml]
+----
+ocp4_workload_showroom_enable_dev_mode: true
+----
+
+=== Per-Container Toggles
+
+You can also enable dev mode for individual containers without turning on the master toggle.
+When the master toggle is `true`, all per-container dev modes are enabled regardless of their individual settings.
+
+[cols="1,1,1,3",options="header"]
+|===
+|Variable |Type |Default |Description
+
+|`ocp4_workload_showroom_enable_dev_mode`
+|boolean
+|`false`
+|Master toggle. When `true`, enables dev mode for all containers.
+
+|`ocp4_workload_showroom_antora_enable_dev_mode`
+|boolean
+|`false`
+|Enable the Antora dev-mode extension (attribute reference page, unlisted pages in nav). Also enabled when the master toggle is `true`.
+|===
+
+=== Example: Enable Dev Mode from the Catalog
+
+To let users toggle dev mode from the demo.redhat.com catalog form:
+
+[source,yaml]
+----
+__meta__:
+  catalog:
+    parameters:
+      - name: ocp4_workload_showroom_enable_dev_mode
+        formLabel: Showroom Dev Mode
+        openAPIV3Schema:
+          type: boolean
+          default: false
+----
+
+Or in `dev.yaml`:
+
+[source,yaml]
+----
+ocp4_workload_showroom_enable_dev_mode: true
+----
+
+== Terminal Configuration
+
+[cols="1,1,1,3",options="header"]
+|===
+|Variable |Type |Default |Description
+
+|`ocp4_workload_showroom_terminal_type`
+|string
+|`showroom`
+|Terminal type: `showroom` (containerised CLI tools), `wetty` (SSH via Wetty), or `""` (no terminal).
+
+|`ocp4_workload_showroom_terminal_image`
+|string
+|`quay.io/rhpds/openshift-showroom-terminal-ocp:latest`
+|Container image for the showroom terminal. Variants: `-ocp`, `-rosa`, `-aro`.
+
+|`ocp4_workload_showroom_wetty_image`
+|string
+|`quay.io/rhpds/wetty:v2.5`
+|Image used when `terminal_type` is `wetty`.
+
+|`ocp4_workload_showroom_terminal_requests_cpu`
+|string
+|`50m`
+|CPU request for the terminal container.
+
+|`ocp4_workload_showroom_terminal_requests_memory`
+|string
+|`256Mi`
+|Memory request for the terminal container.
+
+|`ocp4_workload_showroom_terminal_limits_cpu`
+|string
+|`500m`
+|CPU limit for the terminal container.
+
+|`ocp4_workload_showroom_terminal_limits_memory`
+|string
+|`1Gi`
+|Memory limit for the terminal container.
+|===
+
+=== Terminal Types
+
+`showroom`::
+Deploys a containerised terminal with CLI tools pre-installed (oc, kubectl, etc.).
+Variants are available for different platforms:
++
+* `quay.io/rhpds/openshift-showroom-terminal-ocp:latest` -- OpenShift
+* `quay.io/rhpds/openshift-showroom-terminal-rosa:latest` -- ROSA
+* `quay.io/rhpds/openshift-showroom-terminal-aro:latest` -- ARO
+
+`wetty`::
+Deploys a Wetty web terminal that can optionally auto-SSH to a bastion host.
+Set `ocp4_workload_showroom_wetty_ssh_bastion_login: true` to enable auto-login.
++
+When auto-login is enabled, the role expects these keys in `user_data`:
++
+[cols="1,1,3",options="header"]
+|===
+|Key |Type |Description
+
+|`bastion_public_hostname`
+|string
+|Hostname or IP of the bastion host.
+
+|`bastion_ssh_user_name`
+|string
+|SSH username.
+
+|`bastion_ssh_password`
+|string
+|SSH password.
+
+|`bastion_ssh_port`
+|integer
+|SSH port (defaults to 22).
+|===
+
+`""` (empty string)::
+No terminal is deployed. Use with `ocp4_workload_showroom_content_only: true` for documentation-only labs.
+
+=== Advanced Terminal Layouts
+
+[cols="1,1,1,3",options="header"]
+|===
+|Variable |Type |Default |Description
+
+|`ocp4_workload_showroom_stacked_terminals_enable`
+|boolean
+|`false`
+|Show two terminals stacked vertically in a single tab.
+
+|`ocp4_workload_showroom_second_terminal_tab_enable`
+|boolean
+|`false`
+|Enable a second, separate terminal tab (ignored when stacked terminals are enabled).
+|===
+
+== NoVNC (VNC Desktop Tab)
+
+[cols="1,1,1,3",options="header"]
+|===
+|Variable |Type |Default |Description
+
+|`ocp4_workload_showroom_novnc_enable`
+|boolean
+|`false`
+|Enable a NoVNC tab for connecting to a remote VNC server.
+
+|`ocp4_workload_showroom_novnc_vnc_server_hostport`
+|string
+|`128.0.0.1:5900`
+|VNC server address in `host:port` form.
+
+|`ocp4_workload_showroom_novnc_vnc_server_password`
+|string
+|`password`
+|VNC password.
+
+|`ocp4_workload_showroom_novnc_image`
+|string
+|`ghcr.io/rhpds/showroom-novnc:latest`
+|Container image for the NoVNC client.
+
+|`ocp4_workload_showroom_novnc_requests_cpu`
+|string
+|`50m`
+|CPU request.
+
+|`ocp4_workload_showroom_novnc_requests_memory`
+|string
+|`256Mi`
+|Memory request.
+
+|`ocp4_workload_showroom_novnc_limits_cpu`
+|string
+|`550m`
+|CPU limit.
+
+|`ocp4_workload_showroom_novnc_limits_memory`
+|string
+|`256Mi`
+|Memory limit.
+|===
+
+== Helm Chart Settings
+
+[cols="1,1,1,3",options="header"]
+|===
+|Variable |Type |Default |Description
+
+|`ocp4_workload_showroom_chart_package_url`
+|string
+|`https://rhpds.github.io/showroom-deployer`
+|Helm chart repository URL.
+
+|`ocp4_workload_showroom_deployer_chart_name`
+|string
+|`showroom-single-pod`
+|Chart name.
+
+|`ocp4_workload_showroom_deployer_chart_version`
+|string
+|`"2.0.*"`
+|Chart version or semver range. See https://github.com/rhpds/showroom-deployer/releases[releases].
+
+|`ocp4_workload_showroom_service_name`
+|string
+|`{{ ocp4_workload_showroom_name }}`
+|Name of the Route/Service to wait for when publishing the URL.
+|===
+
+== Zero-Touch and Passthrough Features
+
+[cols="1,1,1,3",options="header"]
+|===
+|Variable |Type |Default |Description
+
+|`ocp4_workload_showroom_zero_touch_bundle`
+|string
+|nookbag v0.3.0 ZIP URL
+|URL of the zero-touch UI bundle (nookbag).
+
+|`ocp4_workload_showroom_zero_touch_ui_enabled`
+|boolean
+|`true`
+|Enable zero-touch UI elements.
+
+|`ocp4_workload_showroom_passthrough_user_data`
+|boolean
+|`false`
+|If `true`, `agnosticd_passthrough_user_data` is copied into per-user entries in `user_data` before deployment.
+|===
+
+== Remote Cluster Deployment
+
+To deploy Showroom to a different cluster than the one Ansible is running against:
+
+[cols="1,1,3",options="header"]
+|===
+|Variable |Type |Description
+
+|`ocp4_workload_showroom_openshift_api_url`
+|string
+|Remote API URL (e.g. `https://api.cluster.example.com:6443`).
+
+|`ocp4_workload_showroom_openshift_api_token`
+|string
+|Bearer token with permissions to create namespaces and workload resources.
+|===
+
+== Multi-User Deployments
+
+Multi-user mode is activated automatically when `user_data` contains a `users` map.
+The role creates one namespace, pod, and route per user:
+
+* `showroom-<guid>-user1.apps.cluster.example.com`
+* `showroom-<guid>-user2.apps.cluster.example.com`
+
+Each user's Showroom instance receives the merged global + per-user data as Antora attributes.
+See xref:user-data.adoc[] for details.
+
+== Examples
+
+=== Minimal single-user
+
+[source,yaml]
+----
+ocp4_workload_showroom_content_git_repo: https://github.com/myorg/my-lab.git
+ocp4_workload_showroom_content_git_repo_ref: main
+----
+
+=== Content-only (no terminals)
+
+[source,yaml]
+----
+ocp4_workload_showroom_content_git_repo: https://github.com/myorg/my-lab.git
+ocp4_workload_showroom_content_only: true
+----
+
+=== Wetty with auto-SSH to bastion
+
+[source,yaml]
+----
+ocp4_workload_showroom_content_git_repo: https://github.com/myorg/my-lab.git
+ocp4_workload_showroom_terminal_type: wetty
+ocp4_workload_showroom_wetty_ssh_bastion_login: true
+----
+
+=== With NoVNC desktop tab
+
+[source,yaml]
+----
+ocp4_workload_showroom_content_git_repo: https://github.com/myorg/my-lab.git
+ocp4_workload_showroom_novnc_enable: true
+ocp4_workload_showroom_novnc_vnc_server_hostport: "vnc-server.my-namespace.svc:5900"
+ocp4_workload_showroom_novnc_vnc_server_password: "s3cret"
+----
+
+=== Standalone playbook
+
+[source,yaml]
+----
+- name: Deploy Showroom
+  hosts: localhost
+  gather_facts: false
+  vars:
+    guid: test-123
+    ACTION: provision
+    openshift_cluster_ingress_domain: apps.cluster.example.com
+    ocp4_workload_showroom_content_git_repo: https://github.com/myorg/my-lab.git
+  roles:
+    - agnosticd.showroom.ocp4_workload_showroom
+----
+
+Run with:
+
+[source,bash]
+----
+ansible-playbook deploy-showroom.yml
+ansible-playbook deploy-showroom.yml -e ACTION=destroy   # to tear down
+----

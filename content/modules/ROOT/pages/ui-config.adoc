@@ -1,0 +1,246 @@
+= UI Configuration
+:navtitle: UI Configuration
+
+The `ui-config.yml` file in your content repository controls what appears in the right-hand pane of the Showroom interface -- terminal tabs, embedded consoles, external links, and layout settings.
+
+== File Location
+
+`ui-config.yml` lives at the root of your content repository (next to `site.yml` and `default-site.yml`).
+
+== Basic Structure
+
+[source,yaml]
+----
+---
+type: showroom
+default_width: 30
+persist_url_state: true
+
+tabs:
+  - name: Terminal
+    path: /wetty
+    port: 443
+  - name: OCP Console
+    url: 'https://console-openshift-console.${DOMAIN}'
+  - name: Documentation
+    url: 'https://docs.redhat.com'
+----
+
+== Top-Level Settings
+
+[cols="1,1,1,3",options="header"]
+|===
+|Key |Type |Default |Description
+
+|`type`
+|string
+|`showroom`
+|UI type. Set to `showroom` for the standard Showroom layout.
+
+|`default_width`
+|integer
+|`30`
+|Default width (in percentage) of the right-hand pane. The content pane fills the rest.
+
+|`persist_url_state`
+|boolean
+|`true`
+|If `true`, the browser remembers which tab was active and restores it on refresh.
+|===
+
+== Tabs
+
+Each entry in the `tabs` list creates a tab in the right-hand pane.
+Tabs can point to internal services (terminal, console) or external URLs.
+
+=== Tab Properties
+
+[cols="1,1,3",options="header"]
+|===
+|Property |Type |Description
+
+|`name`
+|string
+|Display name shown on the tab.
+
+|`url`
+|string
+|Full URL to load in the tab iframe. Use this for external URLs or services on a known hostname. Supports variable substitution (see below).
+
+|`path`
+|string
+|Path relative to the Showroom instance. Used for services running in the same pod or on the same host (e.g. `/wetty` for a terminal).
+
+|`port`
+|integer
+|Port to use when constructing the tab URL from `path`. Typically `443` for HTTPS.
+
+|`secondary_name`
+|string
+|Display name for a stacked secondary panel within the same tab.
+
+|`secondary_path`
+|string
+|Path for the secondary panel.
+
+|`secondary_port`
+|integer
+|Port for the secondary panel.
+|===
+
+=== Variable Substitution
+
+Tab URLs support variable substitution using `$\{VARIABLE}` syntax.
+These are replaced at runtime with values from the deployment:
+
+[cols="1,3",options="header"]
+|===
+|Variable |Description
+
+|`$\{DOMAIN}`
+|The apps domain of the OpenShift cluster (e.g. `apps.cluster.example.com`).
+
+|`$\{GUID}`
+|The unique environment identifier.
+|===
+
+Example:
+
+[source,yaml]
+----
+tabs:
+  - name: OCP Console
+    url: 'https://console-openshift-console.${DOMAIN}'
+  - name: Grafana
+    url: 'https://grafana-${GUID}.${DOMAIN}'
+----
+
+== Common Tab Patterns
+
+=== Terminal (Wetty)
+
+A Wetty terminal running as a sidecar container:
+
+[source,yaml]
+----
+tabs:
+  - name: Terminal
+    path: /wetty
+    port: 443
+----
+
+=== Two Terminals (Stacked)
+
+Two terminals stacked vertically in one tab:
+
+[source,yaml]
+----
+tabs:
+  - name: Terminals
+    path: /wetty
+    port: 443
+    secondary_name: Worker
+    secondary_path: /wetty
+    secondary_port: 443
+----
+
+=== OpenShift Console
+
+The OpenShift web console in an iframe (requires `ocp4_workload_ocp_console_embed`):
+
+[source,yaml]
+----
+tabs:
+  - name: OCP Console
+    url: 'https://console-openshift-console.${DOMAIN}'
+----
+
+=== External URL
+
+Any external resource:
+
+[source,yaml]
+----
+tabs:
+  - name: Product Docs
+    url: 'https://docs.redhat.com/en/documentation/red_hat_ansible_automation_platform'
+----
+
+NOTE: External sites that set `X-Frame-Options` or `Content-Security-Policy` headers that block iframing will not render in the tab. You will see a blank pane or an error.
+
+== Complete Example
+
+This is the `ui-config.yml` from the https://github.com/rhpds/showroom_template_nookbag[showroom_template_nookbag] template:
+
+[source,yaml]
+----
+---
+type: showroom
+default_width: 30
+persist_url_state: true
+
+tabs:
+  - name: OCP Console
+    url: 'https://console-openshift-console.${DOMAIN}'
+  - name: Bastion1
+    path: /wetty
+    port: 443
+  - name: Bastion2
+    path: /wetty
+    port: 443
+    secondary_name: Bastion3
+    secondary_path: /wetty
+    secondary_port: 443
+  - name: Llamastack Docs
+    url: 'https://llama-stack.readthedocs.io/en/latest/'
+----
+
+== Overriding ui-config.yml at Deploy Time
+
+Both roles support overriding `ui-config.yml` without modifying the content repo.
+This is useful for testing different tab layouts or for multi-purpose content repos.
+
+=== OCP4
+
+[source,yaml]
+----
+ocp4_workload_showroom_content_ui_config: |
+  type: showroom
+  default_width: 40
+  tabs:
+    - name: Terminal
+      path: /wetty
+      port: 443
+----
+
+=== VM
+
+[source,yaml]
+----
+showroom_content_ui_config: |
+  type: showroom
+  default_width: 40
+  tabs:
+    - name: Terminal
+      path: /wetty
+      port: 443
+----
+
+These can also be exposed as catalog parameters for testing:
+
+[source,yaml]
+----
+__meta__:
+  catalog:
+    parameters:
+      - name: ocp4_workload_showroom_content_ui_config
+        formLabel: Showroom UI Config Override
+        openAPIV3Schema:
+          type: string
+          default: ''
+----
+
+== Next Steps
+
+* xref:content-repo.adoc[] -- learn about the overall content repo structure.
+* xref:ocp-integration.adoc[] -- set up OCP console embedding for the console tab.

@@ -1,0 +1,100 @@
+= OCP Integration
+:navtitle: OCP Integration
+
+The `ocp4_workload_ocp_console_embed` role makes it possible to embed the OpenShift web console inside a Showroom tab as an iframe.
+By default, OpenShift sets security headers (`X-Frame-Options`, `Content-Security-Policy`) that prevent iframing.
+This role works around that limitation.
+
+NOTE: `ocp4_workload_showroom_ocp_integration` is **deprecated**.
+Use `ocp4_workload_ocp_console_embed` instead -- it is a drop-in replacement.
+
+Add the role to your workloads list **before** the main `ocp4_workload_showroom` role:
+
+[source,yaml]
+----
+workloads:
+  - agnosticd.showroom.ocp4_workload_ocp_console_embed
+  - agnosticd.showroom.ocp4_workload_showroom
+----
+
+== ocp4_workload_ocp_console_embed
+
+This role deploys a lightweight webhook proxy that intercepts OpenShift console responses and strips the headers that prevent iframing.
+It runs as its own deployment in a dedicated namespace.
+
+=== Variables
+
+[cols="1,1,1,3",options="header"]
+|===
+|Variable |Type |Default |Description
+
+|`ocp_console_embed_guid`
+|string
+|`""`
+|GUID for the deployment.
+
+|`ocp_console_embed_domain`
+|string
+|`""`
+|Apps domain for routing.
+
+|`ocp_console_embed_namespace`
+|string
+|`ocp-console-embed`
+|Namespace where the proxy runs.
+
+|`ocp_console_embed_name`
+|string
+|`ocp-console-embed`
+|Name for the deployment and service.
+
+|`ocp_console_embed_image`
+|string
+|`registry.access.redhat.com/ubi10/python-312-minimal:10.1`
+|Container image for the webhook proxy.
+|===
+
+=== How It Works
+
+. The role deploys a Python-based webhook proxy as a pod.
+. The proxy intercepts responses from the OpenShift console and strips `X-Frame-Options` and modifies `Content-Security-Policy` headers.
+. A route is created so Showroom can load the console through the proxy URL.
+
+=== Usage
+
+[source,yaml]
+----
+workloads:
+  - agnosticd.showroom.ocp4_workload_ocp_console_embed
+  - agnosticd.showroom.ocp4_workload_showroom
+----
+
+Then in your `ui-config.yml`, point the console tab at the proxied URL:
+
+[source,yaml]
+----
+tabs:
+  - name: OCP Console
+    url: 'https://console-openshift-console.${DOMAIN}'
+----
+
+== When You Do Not Need This Role
+
+If your lab does not include an OCP console tab in `ui-config.yml`, you do not need this role.
+It is only necessary when you want to embed the OpenShift web console as an iframe tab in Showroom.
+
+== Working Example
+
+The https://github.com/rhpds/agnosticv/tree/main/tests/showroom-ocp4[tests/showroom-ocp4] catalog item uses `ocp4_workload_ocp_console_embed` alongside the main Showroom workload:
+
+[source,yaml]
+----
+workloads:
+  - agnosticd.showroom.ocp4_workload_ocp_console_embed
+  - agnosticd.showroom.ocp4_workload_showroom
+----
+
+== Further Reading
+
+* xref:ui-config.adoc[] -- configure the OCP Console tab.
+* xref:ocp4-role-reference.adoc[] -- the main Showroom OCP4 role.

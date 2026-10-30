@@ -16,7 +16,7 @@ rules:
 - apiGroups: ["apps"]
   resources: ["deployments", "replicasets", "statefulsets", "daemonsets"]
   verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
-# RBAC resources (needed by showroom and other workloads)
+# RBAC resources (needed by workloads that create roles and bindings)
 - apiGroups: ["rbac.authorization.k8s.io"]
   resources: ["roles", "rolebindings", "clusterroles", "clusterrolebindings"]
   verbs: ["get", "list", "watch", "create", "update", "patch", "delete", "bind", "escalate"]

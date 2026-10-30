@@ -1,0 +1,180 @@
+= Quick Start
+:navtitle: Quick Start
+
+This page walks you through the fastest path to a working Showroom lab on the Red Hat Demo Platform.
+Pick the track that matches your environment type.
+
+== Before You Begin
+
+You will need:
+
+* A content repository with your Antora lab instructions (or a fork of the https://github.com/rhpds/showroom_template_nookbag[template]).
+See xref:content-repo.adoc[] if you have not created one yet.
+* Access to the https://github.com/rhpds/agnosticv[agnosticv] repository to create or edit a catalog item.
+* Familiarity with YAML and basic Ansible concepts.
+
+== Path A -- OpenShift 4 Workload
+
+Use this path when your lab provisions an OpenShift cluster and Showroom runs as a pod on that cluster.
+
+=== 1. Add the collection to your catalog item
+
+In your catalog item's `common.yaml`, declare the Showroom collection as a dependency:
+
+[source,yaml,subs="+attributes"]
+----
+requirements_content:
+  collections:
+    - name: https://github.com/agnosticd/showroom.git
+      type: git
+      version: {showroom-collection-version}
+----
+
+=== 2. List the workloads
+
+Add the Showroom workload to your workloads list.
+Showroom should come **last** so that all infrastructure and credentials are available:
+
+[source,yaml]
+----
+workloads:
+  - ocp4_workload_my_operators        # your infra workloads first
+  - agnosticd.showroom.ocp4_workload_showroom
+----
+
+If you want the OpenShift web console embedded as an iframe tab, add `ocp4_workload_ocp_console_embed` before the main Showroom workload.
+See xref:ocp-integration.adoc[].
+
+=== 3. Point to your content repo
+
+[source,yaml]
+----
+ocp4_workload_showroom_content_git_repo: https://github.com/yourorg/your-lab-content.git
+ocp4_workload_showroom_content_git_repo_ref: main
+----
+
+=== 4. Enable dev mode while developing
+
+In your catalog item's `dev.yaml`, enable dev mode so you can see all AsciiDoc attributes and unlisted pages while building your content:
+
+[source,yaml]
+----
+ocp4_workload_showroom_enable_dev_mode: true
+----
+
+IMPORTANT: Always set this in `dev.yaml`, *never* in `common.yaml` or `prod.yaml`.
+Dev mode is a development-time aid -- it should not be visible to end users.
+
+See xref:content-repo.adoc#_dev_mode[Dev Mode] for details on what it provides.
+
+=== 5. Pin the version for production
+
+In `prod.yaml`, always pin the content branch to a tag or a known-good commit -- never ship `main` to production:
+
+[source,yaml]
+----
+ocp4_workload_showroom_content_git_repo_ref: v1.0.0
+----
+
+=== 6. Order from the catalog
+
+Once your catalog item is merged and synced, order it from https://demo.redhat.com[demo.redhat.com].
+The provisioned environment will include a Showroom URL in the access information.
+
+=== Working example
+
+The https://github.com/rhpds/agnosticv/tree/main/tests/showroom-ocp4[tests/showroom-ocp4] catalog item is a complete, minimal example of this path.
+It deploys Showroom with the `ocp-example` branch of the template, a Wetty terminal with auto-SSH to the bastion, and the OCP console embed workload.
+
+---
+
+== Path B -- VM Workload
+
+Use this path when your lab provisions VMs (typically on OpenShift CNV) and Showroom runs on the bastion host via Podman.
+
+=== 1. Add the collection to your catalog item
+
+[source,yaml,subs="+attributes"]
+----
+requirements_content:
+  collections:
+    - name: https://github.com/agnosticd/showroom.git
+      type: git
+      version: {showroom-collection-version}
+----
+
+=== 2. Include the role in post-software workloads
+
+The VM role runs on the bastion host after all other provisioning is complete:
+
+[source,yaml]
+----
+post_software_final_workloads:
+  bastions:
+    - agnosticd.showroom.vm_workload_showroom
+----
+
+=== 3. Point to your content repo
+
+[source,yaml]
+----
+showroom_git_repo: https://github.com/yourorg/your-lab-content.git
+showroom_git_ref: main
+----
+
+=== 4. Configure terminals
+
+Enable one or more tab services:
+
+[source,yaml]
+----
+showroom_tab_services:
+  - single_terminal
+
+showroom_ssh_method: password
+showroom_ssh_host: host.containers.internal
+showroom_ssh_username: lab-user
+showroom_ssh_password: "{{ common_password }}"
+----
+
+=== 5. Set the hostname and TLS
+
+[source,yaml]
+----
+showroom_host: "{{ bastion_public_hostname }}"
+showroom_tls_provider: zerossl           # or 'letsencrypt' or 'none'
+----
+
+=== 6. Enable dev mode while developing
+
+In your catalog item's `dev.yaml`, enable dev mode:
+
+[source,yaml]
+----
+showroom_enable_dev_mode: true
+----
+
+IMPORTANT: Always set this in `dev.yaml`, *never* in `common.yaml` or `prod.yaml`.
+Dev mode is a development-time aid -- it should not be visible to end users.
+
+See xref:content-repo.adoc#_dev_mode[Dev Mode] for details on what it provides.
+
+=== 7. Pin the version for production
+
+In `prod.yaml`:
+
+[source,yaml]
+----
+showroom_git_ref: v1.0.0
+----
+
+=== Working example
+
+The https://github.com/rhpds/agnosticv/tree/main/tests/showroom-vm[tests/showroom-vm] catalog item is a complete, minimal example.
+It deploys Showroom on a bastion VM with two terminals and the `vm-example` branch of the template.
+
+== Next Steps
+
+* xref:content-repo.adoc[] -- learn how to structure your content repo, configure Antora, and develop locally.
+* xref:agnosticv-config.adoc[] -- deeper coverage of AgnosticV wiring, real-world examples, and common patterns.
+* xref:user-data.adoc[] -- understand how runtime variables flow into your AsciiDoc content.

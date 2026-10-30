@@ -41,7 +41,7 @@ cd examples/helm      # or examples/ansible
 Your Git Repo                    OpenShift Cluster
 ┌─────────────┐                 ┌─────────────────────────────┐
 │ Helm Chart  │──── ArgoCD ────▶│ Your Workload               │
-│ (templates, │                 │ (operators, apps, showroom) │
+│ (templates, │                 │ (operators, apps)           │
 │  values)    │                 └─────────────────────────────┘
 └─────────────┘                           │
                                           ▼
@@ -67,6 +67,22 @@ metadata:
     demo.redhat.com/userinfo: ""
 ```
 
+## Showroom
+
+The catalog item can deploy a Showroom lab guide for each user from your repo.
+
+- Put `site.yml`, `ui-config.yml`, and `content/` (with `antora.yml`) at the root of the repo. This repo has a working example.
+- Check **Deploy Showroom?** when you order.
+- Embedded OpenShift console tabs do not work. The terminal tab is set in `ui-config.yml`.
+- A bad layout does not fail the order. A clone error or a missing `site.yml` or `content/` gives a warning in the order details. AsciiDoc or `antora.yml` errors give no warning; check the `antora-builder` container logs.
+- For a private repo, use a read-only token that is valid until the environment is retired. Showroom users can read it, and it is used again when the pod restarts.
+
+Build the guide locally:
+
+```bash
+podman run --rm -v "$PWD:/antora:z" -w /antora --entrypoint antora quay.io/rhpds/antora:v1.3.0 site.yml
+```
+
 ## Community catalog
 
 `catalog/tested/` holds **stubs**, not copies of charts. Each file points at a
@@ -88,12 +104,13 @@ See [catalog/README.md](catalog/README.md).
 - [examples/ansible/README.md](examples/ansible/README.md) - Ansible deployment guide
 - [catalog/README.md](catalog/README.md) - Stub schema for the community catalog
 - [docs/ansible-developer-guide.md](docs/ansible-developer-guide.md) - In-depth Ansible patterns
-- [docs/SHOWROOM-UPDATE-SPEC.md](docs/SHOWROOM-UPDATE-SPEC.md) - Showroom maintenance guide
 
 ## Repository Structure
 
 ```
 field-sourced-content-template/
+├── site.yml         # Showroom example (with ui-config.yml and content/)
+├── content/
 ├── examples/
 │   ├── helm/        # Helm starter chart (also the target of the helm stub)
 │   └── ansible/     # Ansible starter chart (also the target of the ansible stub)

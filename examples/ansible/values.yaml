@@ -1,5 +1,5 @@
 # Ansible Example - GitOps Configuration
-# Installs Web Terminal operator, deploys a sample application, and Showroom lab guide
+# Installs Web Terminal operator and deploys a sample application
 
 # Job configuration
 job:
@@ -35,7 +35,6 @@ ansible:
     - requests
 
   # Ansible collections (pinned for ansible-core 2.15.x compatibility)
-  # Note: agnosticd.showroom is NOT needed - we use a local deploy-showroom role
   collections:
     - kubernetes.core:==3.2.0
     - community.general:==9.5.0
@@ -47,9 +46,6 @@ ansible:
     operator_channel: "fast"
     demo_namespace: "terminal-demo"
     app_name: "hello-world"
-    # Showroom configuration - UPDATE THIS to your lab guide repository
-    showroom_git_repo: "https://github.com/rhpds/showroom_template_nookbag.git"
-    showroom_git_ref: "main"
 
 # Container configuration
 image:
@@ -83,7 +79,7 @@ rbac:
     - apiGroups: ["apps"]
       resources: ["deployments"]
       verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
-    # Required for Showroom Helm deployment
+    # Required for exposing applications
     - apiGroups: ["route.openshift.io"]
       resources: ["routes"]
       verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]

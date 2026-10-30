@@ -1,0 +1,119 @@
+= Showroom Images
+:navtitle: Showroom Images
+
+The https://github.com/rhpds/showroom-images[showroom-images] repository contains the Dockerfiles and build pipelines for all container images used by the Showroom platform.
+Images are hosted on https://quay.io/organization/rhpds[quay.io/rhpds].
+
+== Image Catalog
+
+[cols="1,1,3",options="header"]
+|===
+|Image |Registry |Purpose
+
+|**showroom-content**
+|`quay.io/rhpds/showroom-content`
+|Clones an Antora content repo, injects `user_data` as attributes, builds HTML, and serves it via a web server. The primary content container in both OCP and VM deployments.
+
+|**antora**
+|`quay.io/rhpds/antora`
+|Standalone Antora static site generator. Used as an init container on OCP and as a short-lived builder on VMs. Includes Mermaid diagram support.
+
+|**git-cloner**
+|`quay.io/rhpds/git-cloner`
+|Clones Git repositories with support for branches, tags, and specific commits. Creates a completion signal file for orchestration with other init containers.
+
+|**wetty**
+|`quay.io/rhpds/wetty`
+|Web-based terminal emulator providing SSH access through the browser. Used for the Wetty terminal tab.
+
+|**openshift-showroom-terminal**
+|`quay.io/rhpds/openshift-showroom-terminal-ocp`
+|Containerised terminal with pre-installed CLI tools (oc, kubectl, etc.). Variants: `-ocp`, `-rosa`, `-aro`.
+
+|**novnc-firefox**
+|`quay.io/rhpds/novnc-firefox`
+|Firefox desktop served over noVNC using Xvnc, Openbox, and websockify. Runs on OpenShift with arbitrary UIDs.
+
+|**showroom-cloud**
+|`quay.io/rhpds/showroom-cloud`
+|Node.js service that displays cloud provider configuration for AWS and Azure environments.
+
+|**setup-automation**
+|`quay.io/rhpds/setup-automation`
+|Ansible automation runner that clones repos and executes playbooks for infrastructure setup.
+
+|**traefik**
+|`quay.io/rhpds/traefik`
+|Traefik reverse proxy used by VM deployments for routing and TLS termination.
+|===
+
+== Version Tagging Scheme
+
+Images follow semantic versioning. When a version is released, three tags are pushed:
+
+[cols="1,3",options="header"]
+|===
+|Tag |Example
+
+|Exact version
+|`v1.4.5`
+
+|Minor version
+|`v1.4`
+
+|Major version
+|`v1`
+|===
+
+The Ansible roles reference specific versions in their defaults (e.g. `quay.io/rhpds/showroom-content:{showroom-collection-version}`).
+The `v1.4` and `v1` tags allow automatic pickup of patch releases.
+
+== Build and Release Process
+
+Images are built automatically via GitHub Actions when a git tag is pushed:
+
+. Create a tag using the format: `\{image_name}-v\{semantic_version}`
++
+Example: `showroom-content-v1.4.5`
+
+. Push the tag:
++
+[source,bash]
+----
+git tag showroom-content-v1.4.5
+git push origin showroom-content-v1.4.5
+----
+
+. The GitHub Actions workflow builds the image and pushes three tags to quay.io:
++
+* `quay.io/rhpds/showroom-content:v1.4.5`
+* `quay.io/rhpds/showroom-content:v1.4`
+* `quay.io/rhpds/showroom-content:v1`
+
+== Which Images Do I Need?
+
+=== OCP4 Deployment
+
+The `showroom-single-pod` Helm chart uses:
+
+* `showroom-content` -- content rendering and serving
+* `antora` -- Antora builder (init container)
+* `git-cloner` -- repository cloning (init container)
+* `wetty` or `openshift-showroom-terminal-ocp` -- terminal (optional)
+* `novnc-firefox` -- VNC desktop (optional)
+
+=== VM Deployment
+
+The Podman Compose setup uses:
+
+* `showroom-content` -- content serving
+* `antora` -- Antora builder (one-shot container)
+* `traefik` -- reverse proxy and TLS
+* `wetty` -- terminal (optional)
+
+== Further Reading
+
+* https://github.com/rhpds/showroom-images[Source repository]
+* https://quay.io/organization/rhpds[quay.io/rhpds image registry]
+* xref:architecture.adoc[] -- how images fit into the deployment flow.
+* xref:deployer.adoc[] -- the Helm charts that reference these images.
