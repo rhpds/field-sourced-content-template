@@ -19,8 +19,7 @@ helm/
 │   └── applications.yaml    # Generates ArgoCD Applications per component
 └── components/
     ├── operator/            # OLM operator subscription
-    ├── hello-world/         # Sample demo application
-    └── showroom/            # Lab guide deployment
+    └── hello-world/         # Sample demo application
 ```
 
 Each component under `components/` is a standalone Helm chart. The master chart creates ArgoCD Applications that deploy these child charts.
@@ -31,7 +30,6 @@ Each component under `components/` is a standalone Helm chart. The master chart 
 |-----------|-------------|---------|
 | `operator` | Install operators via OLM | disabled |
 | `helloWorld` | Sample httpd application | enabled |
-| `showroom` | Lab guide with terminal | enabled |
 
 ## Configuration
 
@@ -40,9 +38,6 @@ All settings are in `values.yaml`. Override via Helm values:
 ```bash
 # Enable operator installation
 helm template . --set components.operator.enabled=true
-
-# Use a different lab guide repository
-helm template . --set components.showroom.content.repoUrl=https://github.com/your-org/your-lab.git
 ```
 
 See comments in [values.yaml](values.yaml) and [templates/applications.yaml](templates/applications.yaml) for detailed documentation.

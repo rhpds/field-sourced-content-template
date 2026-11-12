@@ -1,0 +1,269 @@
+= AgnosticV Configuration
+:navtitle: AgnosticV Configuration
+
+This page explains how to wire up the `agnosticd.showroom` collection in an https://github.com/rhpds/agnosticv[AgnosticV] catalog item so that Showroom is deployed alongside your lab environment.
+
+== Collection Dependency
+
+Every catalog item that uses Showroom must declare the collection in `requirements_content`.
+This tells AgnosticD to install the collection before running workloads:
+
+[source,yaml,subs="+attributes"]
+----
+requirements_content:
+  collections:
+    - name: https://github.com/agnosticd/showroom.git
+      type: git
+      version: {showroom-collection-version}    # <1>
+----
+<1> Always pin to a specific release tag. Use https://github.com/agnosticd/showroom/tags[the tags list] to find the latest version.
+
+== Workload Ordering
+
+=== OCP4 Deployments
+
+Add Showroom workloads to the `workloads` list.
+**Order matters** -- Showroom should come last so that all infrastructure roles have finished writing credentials and URLs to `user_data`:
+
+[source,yaml]
+----
+workloads:
+  - ocp4_workload_my_operators
+  - ocp4_workload_my_app
+  - agnosticd.showroom.ocp4_workload_ocp_console_embed  # <1>
+  - agnosticd.showroom.ocp4_workload_showroom            # <2>
+----
+<1> Optional -- enables OCP console embedding in Showroom iframes. See xref:ocp-integration.adoc[].
+<2> The main Showroom deployment. Must be last.
+
+=== VM Deployments
+
+The VM role runs as a post-software workload on the bastion host:
+
+[source,yaml]
+----
+post_software_final_workloads:
+  bastions:
+    - agnosticd.showroom.vm_workload_showroom
+----
+
+Pre-software workloads like `bastion` (for SSH user setup) and `host_common_packages` should run first in `pre_software_workloads`.
+
+== Content Repository Settings
+
+=== OCP4
+
+[source,yaml]
+----
+ocp4_workload_showroom_content_git_repo: https://github.com/yourorg/your-lab-content.git
+ocp4_workload_showroom_content_git_repo_ref: main
+----
+
+=== VM
+
+[source,yaml]
+----
+showroom_git_repo: https://github.com/yourorg/your-lab-content.git
+showroom_git_ref: main
+----
+
+== Version Pinning for Production
+
+[IMPORTANT]
+====
+Production catalog items (`prod.yaml`) **must** pin the content repo ref to a tag or known-good commit.
+Never ship `main` to production -- it can change at any time and break a live lab.
+====
+
+In `common.yaml`, use `main` for development convenience:
+
+[source,yaml]
+----
+ocp4_workload_showroom_content_git_repo_ref: main
+----
+
+In `prod.yaml`, override with a release tag:
+
+[source,yaml]
+----
+ocp4_workload_showroom_content_git_repo_ref: v1.0.0
+----
+
+This pattern is used by all production catalog items. For example, https://github.com/rhpds/agnosticv/blob/main/agd_v2/aap-multiinstance-workshop/prod.yaml[aap-multiinstance-workshop/prod.yaml] overrides the ref to a specific branch.
+
+== Catalog Item Structure
+
+A typical catalog item directory looks like:
+
+[source,text]
+----
+agd_v2/my-workshop/
+├── common.yaml          # shared config (content repo, workloads, variables)
+├── dev.yaml             # development overrides (optional)
+├── prod.yaml            # production overrides (pinned versions)
+├── description.adoc     # catalog description shown on demo.redhat.com
+└── info-message-template.adoc  # access info template
+----
+
+`common.yaml` contains the bulk of the configuration.
+`prod.yaml` and `dev.yaml` override specific values for each stage.
+
+== Real-World Examples
+
+=== OCP4 -- Minimal (test catalog item)
+
+https://github.com/rhpds/agnosticv/tree/main/tests/showroom-ocp4[tests/showroom-ocp4/common.yaml] -- deploys Showroom on an OpenShift cluster with Wetty terminal and OCP console embed:
+
+[source,yaml]
+----
+requirements_content:
+  collections:
+    - name: https://github.com/agnosticd/showroom.git
+      type: git
+      version: "{{ showroom_collection_version }}"
+
+workloads:
+  - agnosticd.showroom.ocp4_workload_ocp_console_embed
+  - agnosticd.showroom.ocp4_workload_showroom
+
+ocp4_workload_showroom_content_git_repo: https://github.com/rhpds/showroom_template_nookbag.git
+ocp4_workload_showroom_content_git_repo_ref: ocp-example
+ocp4_workload_showroom_content_antora_playbook: site.yml
+ocp4_workload_showroom_terminal_type: wetty
+ocp4_workload_showroom_wetty_ssh_bastion_login: true
+----
+
+=== VM -- Minimal (test catalog item)
+
+https://github.com/rhpds/agnosticv/tree/main/tests/showroom-vm[tests/showroom-vm/common.yaml] -- deploys Showroom on a bastion VM with two terminals:
+
+[source,yaml]
+----
+requirements_content:
+  collections:
+    - name: https://github.com/agnosticd/showroom.git
+      type: git
+      version: "{{ showroom_collection_version }}"
+
+post_software_final_workloads:
+  bastions:
+    - agnosticd.showroom.vm_workload_showroom
+
+showroom_git_repo: https://github.com/rhpds/showroom_template_nookbag.git
+showroom_git_ref: vm-example
+showroom_tls_provider: none
+showroom_tab_services:
+  - single_terminal
+  - second_terminal
+----
+
+=== OCP4 -- Production workshop
+
+https://github.com/rhpds/agnosticv/tree/main/agd_v2/aap-multiinstance-workshop[agd_v2/aap-multiinstance-workshop] -- a real production workshop that uses Showroom with OCP integration:
+
+[source,yaml]
+----
+workloads:
+  # ... other workloads ...
+  - agnosticd.showroom.ocp4_workload_ocp_console_embed
+  - agnosticd.showroom.ocp4_workload_showroom
+
+ocp4_workload_showroom_content_git_repo: https://github.com/rhpds/aap-selfserv-intro-showroom.git
+ocp4_workload_showroom_content_git_repo_ref: main
+----
+
+With `prod.yaml` overriding the ref:
+
+[source,yaml]
+----
+ocp4_workload_showroom_content_git_repo_ref: lb1652-aap-self-service
+----
+
+=== OCP4 -- Content-only mode
+
+https://github.com/rhpds/agnosticv/tree/main/agd_v2/mcp-with-openshift[agd_v2/mcp-with-openshift] -- deploys Showroom in content-only mode (no terminal container):
+
+[source,yaml]
+----
+ocp4_workload_showroom_content_git_repo: https://github.com/rhpds/lb1726-mcp-showroom
+ocp4_workload_showroom_content_git_repo_ref: main
+ocp4_workload_showroom_content_only: true
+----
+
+=== OCP4 -- Passthrough user data
+
+https://github.com/rhpds/agnosticv/tree/main/openshift_cnv/ocp-virt-admin-rosetta[openshift_cnv/ocp-virt-admin-rosetta] -- uses `passthrough_user_data` to forward provisioning data to content:
+
+[source,yaml]
+----
+ocp4_workload_showroom_content_git_repo: https://github.com/rhpds/ocp-virt-admin-rosetta-showroom.git
+ocp4_workload_showroom_content_git_repo_ref: main
+ocp4_workload_showroom_terminal_type: showroom
+ocp4_workload_showroom_passthrough_user_data: true
+----
+
+== Common Patterns
+
+Enabling dev mode for development::
+Dev mode is a diagnostic tool every content developer should use.
+It adds an _Attributes_ reference page and shows unlisted pages in the sidebar.
++
+Enable it in `dev.yaml` -- *never* in `common.yaml` or `prod.yaml`:
++
+[cols="1a,1a",options="header"]
+|===
+|OCP4 (`dev.yaml`) |VM (`dev.yaml`)
+
+|
+[source,yaml]
+----
+ocp4_workload_showroom_enable_dev_mode: true
+----
+|
+[source,yaml]
+----
+showroom_enable_dev_mode: true
+----
+|===
++
+See xref:content-repo.adoc#_dev_mode[Dev Mode] for what it provides and xref:ocp4-role-reference.adoc#_dev_mode[OCP4] / xref:vm-role-reference.adoc#_dev_mode[VM] role references for the full variable list.
+
+Exposing catalog parameters for development::
+Make the collection version and dev-mode overridable from the catalog order form:
++
+[source,yaml,subs="+attributes"]
+----
+__meta__:
+  catalog:
+    parameters:
+      - name: showroom_collection_version
+        formLabel: Showroom Collection Version
+        openAPIV3Schema:
+          type: string
+          default: '{showroom-collection-version}'
+      - name: ocp4_workload_showroom_enable_dev_mode
+        formLabel: Showroom Dev Mode
+        openAPIV3Schema:
+          type: boolean
+          default: false
+----
+
+Propagating bastion credentials::
+When your environment provisions a bastion host, propagate its credentials so Showroom's Wetty terminal can auto-SSH:
++
+[source,yaml]
+----
+propagate_provision_data:
+  - name: bastion_public_hostname
+    var: bastion_ansible_host
+  - name: bastion_ssh_user_name
+    var: bastion_ansible_user
+  - name: bastion_ssh_password
+    var: bastion_ansible_ssh_pass
+----
+
+== Next Steps
+
+* xref:ocp4-role-reference.adoc[] -- full variable reference for OCP4 deployments.
+* xref:vm-role-reference.adoc[] -- full variable reference for VM deployments.
+* xref:user-data.adoc[] -- how provisioning data reaches your content.
